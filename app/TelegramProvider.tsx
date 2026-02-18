@@ -1,36 +1,42 @@
 "use client";
 
 import { PropsWithChildren, useEffect, useState } from "react";
-import { init, miniApp, themeParams } from "@telegram-apps/sdk-react";
+// Remove static imports to prevent SSR crash
+// import { init, miniApp, themeParams } from "@telegram-apps/sdk-react";
 
 export function TelegramProvider({ children }: PropsWithChildren) {
   const [isClient, setIsClient] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    try {
-      // Initialize the SDK
-      init();
-      
-      // Attempt to mount mini app if available
-      if (miniApp.mount.isAvailable()) {
-          miniApp.mount();
-      }
-      
-      // Attempt to mount theme params if available
-      if (themeParams.mount.isAvailable()) {
-          themeParams.mount();
-          themeParams.bindCssVars(); // Bind CSS vars for Tailwind
-      }
+    // Wrap in async function to allow await
+    const initSDK = async () => {
+        try {
+            // DYNAMIC IMPORT ATTEMPT FOR PROVIDER
+            const { init, miniApp, themeParams } = await import("@telegram-apps/sdk-react");
+            
+            try {
+                init();
+                if (miniApp.mount.isAvailable()) miniApp.mount();
+                if (themeParams.mount.isAvailable()) {
+                    themeParams.mount();
+                    themeParams.bindCssVars();
+                }
+            } catch (inner) {
+                console.warn("SDK init partial fail", inner);
+            }
 
-      setIsClient(true);
-    } catch (e) {
-      // If we are not in Telegram, init() might fail or throw
-      // We can log it but allow the app to run (maybe in a degraded mode)
-      console.error("Telegram SDK init failed (likely not in Telegram):", e);
-      setError(e as Error);
-      setIsClient(true); // Still render children
-    }
+            setIsClient(true);
+        } catch (e) {
+            // If we are not in Telegram, init() might fail or throw
+            // We can log it but allow the app to run (maybe in a degraded mode)
+            console.error("Telegram SDK init failed (likely not in Telegram):", e);
+            setError(e as Error);
+            setIsClient(true); // Still render children
+        }
+    };
+
+    initSDK();
   }, []);
 
   if (!isClient) {
