@@ -113,6 +113,65 @@ export const getMyStats = query({
   },
 });
 
+// Get today's stats for a user
+export const getMyTodayStats = query({
+  args: {
+    telegramId: v.number(),
+  },
+  handler: async (ctx: any, args: any) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_telegramId", (q: any) => q.eq("telegramId", args.telegramId))
+      .first();
+
+    if (!user) {
+      return { pushup: 0, squat: 0, situp: 0 };
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+
+    const workouts = await ctx.db
+      .query("workouts")
+      .withIndex("by_user_date", (q: any) => q.eq("userId", user._id).eq("date", today))
+      .collect();
+
+    const stats = workouts.reduce(
+      (acc: any, w: any) => {
+        acc[w.type] = (acc[w.type] || 0) + w.count;
+        return acc;
+      },
+      { pushup: 0, squat: 0, situp: 0 } as Record<string, number>
+    );
+
+    return stats;
+  },
+});
+
+// Get recent workouts for the user
+export const getRecentWorkouts = query({
+  args: {
+    telegramId: v.number(),
+  },
+  handler: async (ctx: any, args: any) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_telegramId", (q: any) => q.eq("telegramId", args.telegramId))
+      .first();
+
+    if (!user) {
+      return [];
+    }
+
+    const workouts = await ctx.db
+      .query("workouts")
+      .withIndex("by_user_date", (q: any) => q.eq("userId", user._id))
+      .order("desc")
+      .take(10);
+
+    return workouts;
+  },
+});
+
 // Get global community stats
 export const getGlobalStats = query({
   args: {},
