@@ -3,7 +3,8 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { useState, useEffect } from "react";
-import { retrieveLaunchParams } from "@telegram-apps/sdk-react";
+// Remove static import of Telegram SDK
+// import { retrieveLaunchParams } from "@telegram-apps/sdk-react";
 
 // Simple Error Boundary Component
 function ErrorFallback({ error }: { error: any }) {
@@ -38,25 +39,32 @@ export default function Home() {
     setIsMounted(true);
     addLog("App mounted");
 
-    try {
-      if (typeof window !== 'undefined') {
-        // Check if we are in Telegram Webview
-        const isTg = (window as any).Telegram?.WebApp;
-        addLog(`Window.Telegram present: ${!!isTg}`);
-
+    const initTelegram = async () => {
         try {
-            const params = retrieveLaunchParams();
-            addLog("Params retrieved successfully");
-            setLp(params);
-        } catch(e: any) {
-            addLog(`Failed to retrieve params: ${e.message}`);
-            // If we are developing locally, we might not have params, that's okay.
+            if (typeof window !== 'undefined') {
+                // Check if we are in Telegram Webview
+                const isTg = (window as any).Telegram?.WebApp;
+                addLog(`Window.Telegram present: ${!!isTg}`);
+
+                // DYNAMIC IMPORT to prevent server-side crash
+                const { retrieveLaunchParams } = await import("@telegram-apps/sdk-react");
+                
+                try {
+                    const params = retrieveLaunchParams();
+                    addLog("Params retrieved successfully");
+                    setLp(params);
+                } catch(e: any) {
+                    addLog(`Failed to retrieve params: ${e.message}`);
+                    // If we are developing locally, we might not have params, that's okay.
+                }
+            }
+        } catch (e: any) {
+            addLog(`CRITICAL INIT ERROR: ${e.message}`);
+            // setError(e);
         }
-      }
-    } catch (e: any) {
-      addLog(`CRITICAL INIT ERROR: ${e.message}`);
-      // setError(e); // Don't crash the whole app, just log it
-    }
+    };
+
+    initTelegram();
   }, []);
 
   // 3. DERIVED STATE
@@ -94,6 +102,7 @@ export default function Home() {
   // 5. RENDER
   if (error) return <ErrorFallback error={error} />;
 
+  // Prevent hydration mismatch by showing simple loading state until client mount
   if (!isMounted) return <div className="p-10 text-center">Loading...</div>;
 
   // Render the debug UI if something is wrong or just for visibility
