@@ -29,11 +29,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <ConvexClientProvider>
-          <TelegramProvider>
-            {children}
-          </TelegramProvider>
-        </ConvexClientProvider>
+        {children}
       </body>
     </html>
   );
