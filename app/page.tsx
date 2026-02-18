@@ -34,8 +34,15 @@ export default function Home() {
   // Helper to add logs
   const addLog = (msg: string) => setDebugLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
 
-  // 2. INITIALIZATION EFFECT
-  useEffect(() => {
+    // Initialize Eruda
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            import('eruda').then(eruda => eruda.default.init());
+        }
+    }, []);
+
+    // 2. INITIALIZATION EFFECT
+    useEffect(() => {
     setIsMounted(true);
     addLog("App mounted");
 
