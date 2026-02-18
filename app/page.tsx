@@ -55,7 +55,7 @@ export default function Home() {
       }
     } catch (e: any) {
       addLog(`CRITICAL INIT ERROR: ${e.message}`);
-      setError(e);
+      // setError(e); // Don't crash the whole app, just log it
     }
   }, []);
 
