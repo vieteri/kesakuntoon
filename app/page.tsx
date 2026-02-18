@@ -67,100 +67,109 @@ export default function Home() {
     initTelegram();
   }, []);
 
-  // 3. DERIVED STATE
-  const user = lp?.initData?.user;
-  const telegramId = user?.id;
-  const rawInitData = lp?.initDataRaw;
-
-  // 4. CONVEX HOOKS (Only run if we have an ID to avoid unnecessary queries)
-  // We use "skip" if no ID, so these shouldn't crash
-  const todayStats = useQuery(api.workouts.getMyTodayStats, telegramId ? { telegramId } : "skip");
-  const globalStats = useQuery(api.workouts.getGlobalStats);
-  const recentWorkouts = useQuery(api.workouts.getRecentWorkouts, telegramId ? { telegramId } : "skip");
+    // 3. DERIVED STATE
+    // Check if we have valid user data before accessing
+    const user = lp?.initData?.user;
+    const telegramId = user?.id;
+    const rawInitData = lp?.initDataRaw;
   
-  const logWorkoutMutation = useMutation(api.workouts.logWorkout);
-  const [logging, setLogging] = useState<string | null>(null);
+    // 4. CONVEX HOOKS (Only run if we have an ID to avoid unnecessary queries)
+    // We use "skip" if no ID, so these shouldn't crash
+    const todayStats = useQuery(api.workouts.getMyTodayStats, telegramId ? { telegramId } : "skip");
+    const globalStats = useQuery(api.workouts.getGlobalStats);
+    const recentWorkouts = useQuery(api.workouts.getRecentWorkouts, telegramId ? { telegramId } : "skip");
+    
+    const logWorkoutMutation = useMutation(api.workouts.logWorkout);
+    const [logging, setLogging] = useState<string | null>(null);
+  
+    const handleLog = async (type: string, count: number) => {
+      if (!telegramId || !rawInitData) {
+          alert("Cannot log: Missing Telegram data");
+          return;
+      }
+  
+      setLogging(type);
+      try {
+          await logWorkoutMutation({ initData: rawInitData, type, count });
+          addLog(`Logged ${count} ${type}s`);
+      } catch (err: any) {
+          addLog(`Log failed: ${err.message}`);
+          alert("Failed to log. See debug info.");
+      } finally {
+          setLogging(null);
+      }
+    };
 
-  const handleLog = async (type: string, count: number) => {
-    if (!telegramId || !rawInitData) {
-        alert("Cannot log: Missing Telegram data");
-        return;
-    }
-
-    setLogging(type);
-    try {
-        await logWorkoutMutation({ initData: rawInitData, type, count });
-        addLog(`Logged ${count} ${type}s`);
-    } catch (err: any) {
-        addLog(`Log failed: ${err.message}`);
-        alert("Failed to log. See debug info.");
-    } finally {
-        setLogging(null);
-    }
-  };
-
-  // 5. RENDER
-  if (error) return <ErrorFallback error={error} />;
-
-  // Prevent hydration mismatch by showing simple loading state until client mount
-  if (!isMounted) return <div className="p-10 text-center">Loading...</div>;
-
-  // Render the debug UI if something is wrong or just for visibility
-  const DebugUI = () => (
-    <div className="mt-8 p-4 bg-gray-900 text-green-400 font-mono text-xs rounded w-full max-w-md overflow-hidden">
-        <p className="font-bold border-b border-gray-700 mb-2">Debug Console</p>
-        <div className="space-y-1">
-            <p>User ID: {telegramId || "None"}</p>
-            <p>Convex URL: {process.env.NEXT_PUBLIC_CONVEX_URL || "Missing!"}</p>
-            <div className="border-t border-gray-800 mt-2 pt-2">
-                {debugLogs.map((l, i) => <p key={i}>{l}</p>)}
-            </div>
-        </div>
-    </div>
-  );
-
-  // If we are not in Telegram (no user ID), show a friendly message + Debug
-  if (!telegramId) {
-      return (
-        <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-50 text-gray-900 font-sans">
-             <h1 className="text-2xl font-bold mb-2">Kesakuntoon</h1>
-             <p className="text-gray-500 mb-4">Please open this app in Telegram.</p>
-             <DebugUI />
-        </main>
-      )
-  }
-
-  // Main Dashboard
-  return (
-    <main className="flex min-h-screen flex-col items-center p-6 bg-gray-50 text-gray-900 font-sans">
-      <header className="w-full max-w-md mb-8 flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Hi, {user?.firstName}!</h1>
-          <p className="text-sm text-gray-500">Today's Progress</p>
-        </div>
-        <div className="text-right">
-          <p className="text-xs text-gray-500 uppercase tracking-wide">Community Total</p>
-          <p className="text-xl font-bold text-blue-600">
-            {globalStats?.totalCount ? globalStats.totalCount.toLocaleString() : "..."}
-          </p>
-        </div>
-      </header>
-
-      {/* Stats Grid */}
-      <div className="w-full max-w-md grid grid-cols-3 gap-3 mb-8">
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center">
-          <span className="text-xs text-gray-400 font-medium uppercase mb-1">Pushups</span>
-          <span className="text-3xl font-bold text-gray-800">{todayStats?.pushup || 0}</span>
-        </div>
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center">
-          <span className="text-xs text-gray-400 font-medium uppercase mb-1">Squats</span>
-          <span className="text-3xl font-bold text-gray-800">{todayStats?.squat || 0}</span>
-        </div>
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center">
-          <span className="text-xs text-gray-400 font-medium uppercase mb-1">Situps</span>
-          <span className="text-3xl font-bold text-gray-800">{todayStats?.situp || 0}</span>
-        </div>
+    // 5. RENDER
+    // Only access properties if we have data to prevent crashes
+    if (error) return <ErrorFallback error={error} />;
+  
+    // Prevent hydration mismatch by showing simple loading state until client mount
+    if (!isMounted) return <div className="p-10 text-center">Loading...</div>;
+  
+    // Render the debug UI if something is wrong or just for visibility
+    const DebugUI = () => (
+      <div className="mt-8 p-4 bg-gray-900 text-green-400 font-mono text-xs rounded w-full max-w-md overflow-hidden">
+          <p className="font-bold border-b border-gray-700 mb-2">Debug Console</p>
+          <div className="space-y-1">
+              <p>User ID: {telegramId || "None"}</p>
+              <p>Convex URL: {process.env.NEXT_PUBLIC_CONVEX_URL || "Missing!"}</p>
+              <div className="border-t border-gray-800 mt-2 pt-2">
+                  {debugLogs.map((l, i) => <p key={i}>{l}</p>)}
+              </div>
+          </div>
       </div>
+    );
+  
+    // If we are not in Telegram (no user ID), show a friendly message + Debug
+    if (!telegramId) {
+        return (
+          <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-50 text-gray-900 font-sans">
+               <h1 className="text-2xl font-bold mb-2">Kesakuntoon</h1>
+               <p className="text-gray-500 mb-4">Please open this app in Telegram.</p>
+               <DebugUI />
+          </main>
+        )
+    }
+
+    // Safely access stats with fallback values
+    const pushups = todayStats?.pushup || 0;
+    const squats = todayStats?.squat || 0;
+    const situps = todayStats?.situp || 0;
+    const totalCommunity = globalStats?.totalCount ? globalStats.totalCount.toLocaleString() : "...";
+  
+    // Main Dashboard
+    return (
+      <main className="flex min-h-screen flex-col items-center p-6 bg-gray-50 text-gray-900 font-sans">
+        <header className="w-full max-w-md mb-8 flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Hi, {user?.firstName}!</h1>
+            <p className="text-sm text-gray-500">Today's Progress</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Community Total</p>
+            <p className="text-xl font-bold text-blue-600">
+              {totalCommunity}
+            </p>
+          </div>
+        </header>
+  
+        {/* Stats Grid */}
+        <div className="w-full max-w-md grid grid-cols-3 gap-3 mb-8">
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center">
+            <span className="text-xs text-gray-400 font-medium uppercase mb-1">Pushups</span>
+            <span className="text-3xl font-bold text-gray-800">{pushups}</span>
+          </div>
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center">
+            <span className="text-xs text-gray-400 font-medium uppercase mb-1">Squats</span>
+            <span className="text-3xl font-bold text-gray-800">{squats}</span>
+          </div>
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center">
+            <span className="text-xs text-gray-400 font-medium uppercase mb-1">Situps</span>
+            <span className="text-3xl font-bold text-gray-800">{situps}</span>
+          </div>
+        </div>
+
 
       {/* Actions */}
       <div className="w-full max-w-md space-y-3 mb-8">
