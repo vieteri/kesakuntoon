@@ -3,38 +3,29 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { useState, useEffect } from "react";
-import { useLaunchParams } from "@telegram-apps/sdk-react";
+import { retrieveLaunchParams } from "@telegram-apps/sdk-react";
 
 export default function Home() {
   const [telegramInitData, setTelegramInitData] = useState<string | null>(null);
   const [telegramUser, setTelegramUser] = useState<any>(null);
   const [isTelegram, setIsTelegram] = useState(false);
+  const [lp, setLp] = useState<any>(null);
+  const [isMounted, setIsMounted] = useState(false);
 
-  // Safely get Telegram Launch Params
   useEffect(() => {
+    setIsMounted(true);
     try {
-        // We can't call useLaunchParams directly in render if it might throw outside Telegram
-        // So we might need to be careful. However, the SDK updated recently.
-        // Let's try to detect if window.Telegram is available or just use try/catch block if possible.
-        // Actually, the safest way in React 18+ with this SDK is often just using it inside a component that is only rendered if SDK init succeeded, 
-        // OR catching the error.
-        // For simplicity in this "catch-all" page, we'll try to use a state-based approach if the hook isn't safe conditionally.
-        // But hooks must be top level.
-        // Let's assume the provider handles safety or we just accept it might fail in dev browser.
+        // Try to retrieve launch params safely on client mount
+        // retrieveLaunchParams checks window.location.hash and sessionStorage
+        if (typeof window !== 'undefined') {
+            const params = retrieveLaunchParams();
+            setLp(params);
+            setIsTelegram(true);
+        }
     } catch (e) {
-        console.error("Not in Telegram");
+        console.error("Not in Telegram environment or failed to retrieve params", e);
     }
   }, []);
-
-  // Let's use the hook, but we know it might fail if not in Telegram.
-  // We'll wrap it in a try-catch for the value access if needed, or rely on the Provider to have initialized it.
-  // Actually, standard practice:
-  let lp: any;
-  try {
-    lp = useLaunchParams();
-  } catch(e) {
-    // console.log("Not in Telegram environment");
-  }
 
   const user = lp?.initData?.user;
   const telegramId = user?.id;
@@ -47,7 +38,7 @@ export default function Home() {
   
   const logWorkoutMutation = useMutation(api.workouts.logWorkout);
 
-  const [logging, setLogging] = useState<string | null>(null); // 'pushup' | 'squat' | 'situp' | null
+  const [logging, setLogging] = useState<string | null>(null);
 
   const handleLog = async (type: string, count: number) => {
     if (!telegramId || !rawInitData) {
@@ -62,7 +53,6 @@ export default function Home() {
             type,
             count
         });
-        // Optimistic update or simple alert? Convex updates automatically.
     } catch (err) {
         console.error(err);
         alert("Failed to log. Try again.");
@@ -70,6 +60,18 @@ export default function Home() {
         setLogging(null);
     }
   };
+
+  // Prevent hydration mismatch by rendering a loader or generic state until mounted
+  if (!isMounted) {
+      return (
+        <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-50 text-gray-900 font-sans">
+             <div className="animate-pulse flex flex-col items-center">
+                <div className="h-8 w-32 bg-gray-200 rounded mb-4"></div>
+                <div className="h-4 w-48 bg-gray-200 rounded"></div>
+             </div>
+        </main>
+      );
+  }
 
   if (!telegramId) {
       return (
