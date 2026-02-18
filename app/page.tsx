@@ -44,7 +44,13 @@ export default function Home() {
             if (typeof window !== 'undefined') {
                 // Check if we are in Telegram Webview
                 const isTg = (window as any).Telegram?.WebApp;
-                addLog(`Window.Telegram present: ${!!isTg}`);
+                
+                if (!isTg) {
+                    addLog("Not in Telegram (window.Telegram.WebApp missing)");
+                    return; // Don't even try to load SDK if not in Telegram
+                }
+
+                addLog("Telegram WebApp detected");
 
                 // DYNAMIC IMPORT to prevent server-side crash
                 const { retrieveLaunchParams } = await import("@telegram-apps/sdk-react");
@@ -55,12 +61,10 @@ export default function Home() {
                     setLp(params);
                 } catch(e: any) {
                     addLog(`Failed to retrieve params: ${e.message}`);
-                    // If we are developing locally, we might not have params, that's okay.
                 }
             }
         } catch (e: any) {
             addLog(`CRITICAL INIT ERROR: ${e.message}`);
-            // setError(e);
         }
     };
 
@@ -105,7 +109,12 @@ export default function Home() {
     if (error) return <ErrorFallback error={error} />;
   
     // Prevent hydration mismatch by showing simple loading state until client mount
-    if (!isMounted) return <div className="p-10 text-center">Loading...</div>;
+    if (!isMounted) return (
+        <div className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-50">
+            <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mb-4"></div>
+            <p className="text-gray-400 text-sm">Loading Kesakuntoon...</p>
+        </div>
+    );
   
     // Render the debug UI if something is wrong or just for visibility
     const DebugUI = () => (
@@ -113,8 +122,8 @@ export default function Home() {
           <p className="font-bold border-b border-gray-700 mb-2">Debug Console</p>
           <div className="space-y-1">
               <p>User ID: {telegramId || "None"}</p>
-              <p>Convex URL: {process.env.NEXT_PUBLIC_CONVEX_URL || "Missing!"}</p>
-              <div className="border-t border-gray-800 mt-2 pt-2">
+              <p>Convex URL: {process.env.NEXT_PUBLIC_CONVEX_URL ? "Set" : "Missing"}</p>
+              <div className="border-t border-gray-800 mt-2 pt-2 max-h-32 overflow-y-auto">
                   {debugLogs.map((l, i) => <p key={i}>{l}</p>)}
               </div>
           </div>
