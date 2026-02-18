@@ -49,29 +49,48 @@ export default function Home() {
     const initTelegram = async () => {
         try {
             if (typeof window !== 'undefined') {
-                // Check if we are in Telegram Webview
-                const isTg = (window as any).Telegram?.WebApp;
+                // Wait for Telegram WebApp script to load (max 5 seconds)
+                let attempts = 0;
+                while (!(window as any).Telegram?.WebApp && attempts < 50) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
+                }
                 
-                if (!isTg) {
-                    addLog("Not in Telegram (window.Telegram.WebApp missing)");
-                    return; // Don't even try to load SDK if not in Telegram
+                const tgWebApp = (window as any).Telegram?.WebApp;
+                
+                if (!tgWebApp) {
+                    addLog("Not in Telegram (window.Telegram.WebApp missing after waiting)");
+                    return;
                 }
 
-                addLog("Telegram WebApp detected");
-
-                // DYNAMIC IMPORT to prevent server-side crash
-                const { retrieveLaunchParams } = await import("@telegram-apps/sdk-react");
+                addLog("Telegram WebApp detected!");
+                addLog(`Platform: ${tgWebApp.platform}`);
+                addLog(`Version: ${tgWebApp.version}`);
                 
-                try {
-                    const params = retrieveLaunchParams();
-                    addLog("Params retrieved successfully");
-                    setLp(params);
-                } catch(e: any) {
-                    addLog(`Failed to retrieve params: ${e.message}`);
+                // Initialize the WebApp
+                tgWebApp.ready();
+                addLog("WebApp.ready() called");
+
+                // Get user data from init data
+                const initData = tgWebApp.initData;
+                const initDataUnsafe = tgWebApp.initDataUnsafe;
+                
+                addLog(`Init data exists: ${!!initData}`);
+                addLog(`User: ${JSON.stringify(initDataUnsafe?.user)}`);
+                
+                if (initDataUnsafe?.user) {
+                    setLp({
+                        initData: initDataUnsafe,
+                        initDataRaw: initData
+                    });
+                    addLog("User data set successfully");
+                } else {
+                    addLog("No user data in initDataUnsafe");
                 }
             }
         } catch (e: any) {
             addLog(`CRITICAL INIT ERROR: ${e.message}`);
+            console.error("Telegram init error:", e);
         }
     };
 
