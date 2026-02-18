@@ -1,65 +1,136 @@
-import Image from "next/image";
+"use client";
+
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../convex/_generated/api";
+import { useEffect, useState } from "react";
+import { useLaunchParams } from "@telegram-apps/sdk-react";
 
 export default function Home() {
+  const [telegramInitData, setTelegramInitData] = useState<any>(null);
+  
+  // Attempt to get launch params safely
+  let lp: any;
+  try {
+    lp = useLaunchParams();
+  } catch (e) {
+    // Fallback for development outside Telegram
+    console.warn("Not in Telegram environment");
+  }
+
+  const telegramUser = lp?.initData?.user;
+  const telegramId = telegramUser?.id;
+
+  // Convex hooks
+  const stats = useQuery(api.workouts.getMyStats, 
+    telegramId ? { telegramId } : "skip"
+  );
+  
+  const globalStats = useQuery(api.workouts.getGlobalStats);
+  const logWorkout = useMutation(api.workouts.logWorkout);
+
+  const [logging, setLogging] = useState(false);
+
+  const handleLog = async (type: string, count: number) => {
+    if (!telegramId) {
+      alert("Please open this app in Telegram to log workouts.");
+      return;
+    }
+    
+    setLogging(true);
+    try {
+      // Use the raw initData string from launch params
+      const initData = lp?.initDataRaw; 
+      
+      if (!initData) {
+         // Fallback for dev mode
+         console.warn("No initData found. Using mock for dev if configured.");
+         // In production this should fail or prompt user
+         alert("Authentication failed: No Telegram data found.");
+         return;
+      }
+
+      await logWorkout({
+        initData,
+        type,
+        count,
+        // date is optional now, server handles it
+      });
+      alert(`Logged ${count} ${type}s!`);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to log workout");
+    } finally {
+      setLogging(false);
+    }
+  };
+
+  if (!telegramUser && !lp) {
+     // Dev mode fallback UI or instructions
+     return (
+       <div className="flex min-h-screen flex-col items-center justify-center p-4 text-center">
+         <h1 className="text-2xl font-bold mb-4">Kesakuntoon</h1>
+         <p>Please open this app in Telegram.</p>
+         <p className="text-sm text-gray-500 mt-2">(Dev Mode: Params not found)</p>
+       </div>
+     );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="flex min-h-screen flex-col items-center p-6 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      <header className="w-full max-w-md mb-8 flex justify-between items-center">
+        <div>
+          <h1 className="text-xl font-bold">Hi, {telegramUser?.firstName || "User"}!</h1>
+          <p className="text-sm text-gray-500">Ready to sweat?</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="text-right">
+          <p className="text-xs text-gray-500">Community Total</p>
+          <p className="text-lg font-bold text-blue-600">{globalStats?.totalCount || 0}</p>
         </div>
-      </main>
-    </div>
+      </header>
+
+      <div className="w-full max-w-md grid grid-cols-1 gap-4 mb-8">
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+          <h2 className="text-lg font-semibold mb-4">Your Progress</h2>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Pushups</p>
+              <p className="text-xl font-bold">{stats?.pushup || 0}</p>
+            </div>
+            <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+              <p className="text-xs text-green-600 dark:text-green-400 font-medium">Squats</p>
+              <p className="text-xl font-bold">{stats?.squat || 0}</p>
+            </div>
+            <div className="p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+              <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">Situps</p>
+              <p className="text-xl font-bold">{stats?.situp || 0}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="w-full max-w-md space-y-3">
+        <h2 className="text-lg font-semibold mb-2">Log Activity</h2>
+        
+        {["pushup", "squat", "situp"].map((type) => (
+          <div key={type} className="flex gap-2">
+            <button
+              onClick={() => handleLog(type, 10)}
+              disabled={logging}
+              className="flex-1 py-3 px-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl font-medium shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex justify-between items-center"
+            >
+              <span className="capitalize">{type}s</span>
+              <span className="text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">+10</span>
+            </button>
+            <button
+               onClick={() => handleLog(type, 25)}
+               disabled={logging}
+               className="py-3 px-4 bg-blue-600 text-white rounded-xl font-medium shadow-sm hover:bg-blue-700 transition-colors"
+            >
+              +25
+            </button>
+          </div>
+        ))}
+      </div>
+    </main>
   );
 }
