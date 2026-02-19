@@ -184,13 +184,13 @@ export const getMyTargets = query({
       .first();
 
     if (!user) {
-      return { targetPushup: null, targetSquat: null, targetSitup: null };
+      return {};
     }
 
     return {
-      targetPushup: user.targetPushup ?? null,
-      targetSquat: user.targetSquat ?? null,
-      targetSitup: user.targetSitup ?? null,
+      targetPushup: user.targetPushup,
+      targetSquat: user.targetSquat,
+      targetSitup: user.targetSitup,
     };
   },
 });
