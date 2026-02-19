@@ -2,7 +2,141 @@
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+
+const ITEM_H = 40;
+const VISIBLE = 5;
+const CONTAINER_H = ITEM_H * VISIBLE;
+const PAD = (CONTAINER_H - ITEM_H) / 2;
+const MIN_VAL = 1;
+const MAX_VAL = 200;
+
+function DrumPicker({
+  value,
+  onChange,
+  accentColor,
+  disabled,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  accentColor: string;
+  disabled: boolean;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isScrollingRef = useRef(false);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scrollToValue = useCallback((val: number, smooth: boolean) => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: (val - MIN_VAL) * ITEM_H, behavior: smooth ? "smooth" : "instant" });
+  }, []);
+
+  // Scroll to initial value on mount (no animation)
+  useEffect(() => {
+    scrollToValue(value, false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sync scroll when value changes externally
+  useEffect(() => {
+    if (!isScrollingRef.current) {
+      scrollToValue(value, true);
+    }
+  }, [value, scrollToValue]);
+
+  const handleScroll = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    isScrollingRef.current = true;
+
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    scrollTimeoutRef.current = setTimeout(() => {
+      isScrollingRef.current = false;
+      const raw = Math.round(el.scrollTop / ITEM_H) + MIN_VAL;
+      const clamped = Math.max(MIN_VAL, Math.min(MAX_VAL, raw));
+      // Snap
+      el.scrollTo({ top: (clamped - MIN_VAL) * ITEM_H, behavior: "smooth" });
+      onChange(clamped);
+    }, 80);
+  };
+
+  const items = Array.from({ length: MAX_VAL - MIN_VAL + 1 }, (_, i) => i + MIN_VAL);
+
+  return (
+    <div className="relative select-none" style={{ width: 72, height: CONTAINER_H }}>
+      {/* Highlight stripe */}
+      <div
+        className="absolute left-0 right-0 pointer-events-none z-10 rounded-lg"
+        style={{
+          top: PAD,
+          height: ITEM_H,
+          border: `2px solid ${accentColor}`,
+          background: `${accentColor}18`,
+        }}
+      />
+      {/* Scroll container */}
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="absolute inset-0 overflow-y-scroll"
+        style={{ scrollSnapType: "y mandatory", scrollbarWidth: "none" }}
+      >
+        {/* top padding spacer */}
+        <div style={{ height: PAD }} />
+        {items.map((n) => {
+          const dist = Math.abs(n - value);
+          const opacity = dist === 0 ? 1 : dist === 1 ? 0.5 : dist === 2 ? 0.25 : 0.1;
+          const scale = dist === 0 ? 1.25 : 1;
+          return (
+            <div
+              key={n}
+              onClick={() => {
+                if (disabled) return;
+                onChange(n);
+                scrollToValue(n, true);
+              }}
+              style={{
+                height: ITEM_H,
+                scrollSnapAlign: "center",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: disabled ? "default" : "pointer",
+                opacity,
+                transform: `scale(${scale})`,
+                transition: "opacity 0.15s, transform 0.15s",
+                fontWeight: dist === 0 ? 700 : 400,
+                fontSize: dist === 0 ? 22 : 16,
+                color: dist === 0 ? accentColor : "#374151",
+              }}
+            >
+              {n}
+            </div>
+          );
+        })}
+        {/* bottom padding spacer */}
+        <div style={{ height: PAD }} />
+      </div>
+      {/* Fade top */}
+      <div
+        className="absolute top-0 left-0 right-0 pointer-events-none z-20"
+        style={{
+          height: PAD,
+          background: "linear-gradient(to bottom, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 100%)",
+        }}
+      />
+      {/* Fade bottom */}
+      <div
+        className="absolute bottom-0 left-0 right-0 pointer-events-none z-20"
+        style={{
+          height: PAD,
+          background: "linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 100%)",
+        }}
+      />
+    </div>
+  );
+}
 // Remove static import of Telegram SDK
 // import { retrieveLaunchParams } from "@telegram-apps/sdk-react";
 
@@ -311,29 +445,25 @@ export default function Home() {
         </div>
 
 
-      {/* Actions — Sliders */}
-      <div className="w-full max-w-md bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-8 space-y-5">
-        {(["pushup", "squat", "situp"] as const).map((type) => {
-          const cfg = exerciseConfig[type];
-          return (
-            <div key={type}>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-sm font-medium text-gray-700">{cfg.label}</span>
-                <span className={`text-sm font-bold ${cfg.text}`}>{sliderValues[type]}</span>
+      {/* Actions — Drum Pickers */}
+      <div className="w-full max-w-md bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-8">
+        <div className="flex justify-around mb-4">
+          {(["pushup", "squat", "situp"] as const).map((type) => {
+            const cfg = exerciseConfig[type];
+            const accentColor = type === "pushup" ? "#2563eb" : type === "squat" ? "#16a34a" : "#f97316";
+            return (
+              <div key={type} className="flex flex-col items-center gap-2">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{cfg.label}</span>
+                <DrumPicker
+                  value={sliderValues[type]}
+                  onChange={(v) => setSliderValues(prev => ({ ...prev, [type]: v }))}
+                  accentColor={accentColor}
+                  disabled={!!logging}
+                />
               </div>
-              <input
-                type="range"
-                min={1}
-                max={200}
-                value={sliderValues[type]}
-                onChange={(e) => setSliderValues(prev => ({ ...prev, [type]: Number(e.target.value) }))}
-                disabled={!!logging}
-                className="w-full accent-current"
-                style={{ accentColor: type === "pushup" ? "#2563eb" : type === "squat" ? "#16a34a" : "#f97316" }}
-              />
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
         <button
           onClick={handleSave}
           disabled={!!logging}
