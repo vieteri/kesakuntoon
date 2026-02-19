@@ -15,9 +15,10 @@ export default defineSchema({
 
   // Group membership join table — auto-populated on first use from each group
   groupMembers: defineTable({
-    chatId:   v.number(),    // Telegram group chat ID
-    userId:   v.id("users"),
-    joinedAt: v.number(),
+    chatId:    v.number(),            // Telegram group chat ID
+    chatTitle: v.optional(v.string()), // Group name, if known
+    userId:    v.id("users"),
+    joinedAt:  v.number(),
   })
   .index("by_chat",      ["chatId"])
   .index("by_user_chat", ["userId", "chatId"]),

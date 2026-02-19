@@ -21,13 +21,18 @@ http.route({
       return new Response("Invalid JSON", { status: 400 });
     }
 
+
+
     // Bot added to a group — scan known users
     const myChatMember = update?.my_chat_member;
     if (myChatMember) {
       const newStatus = myChatMember.new_chat_member?.status;
       const groupChatId: number = myChatMember.chat?.id;
       if (groupChatId && (newStatus === "member" || newStatus === "administrator")) {
-        await ctx.runMutation(api.groups.scanUsersIntoGroup, { chatId: groupChatId });
+        await ctx.runMutation(api.groups.scanUsersIntoGroup, {
+          chatId: groupChatId,
+          chatTitle: myChatMember.chat?.title,
+        });
       }
       return new Response("OK", { status: 200 });
     }
@@ -42,23 +47,29 @@ http.route({
 
     // Auto-link sender to group if they're a known app user
     if (chatType !== "private" && message.from) {
-      await ctx.runMutation(api.groups.autoLinkUser, {
-        telegramId: message.from.id,
-        firstName: message.from.first_name,
-        username: message.from.username,
-        chatId,
-      });
+      try {
+        await ctx.runMutation(api.groups.autoLinkUser, {
+          telegramId: message.from.id,
+          firstName: message.from.first_name,
+          username: message.from.username,
+          chatId,
+          chatTitle: message.chat?.title,
+        });
+      } catch { /* non-fatal */ }
     }
 
     // Auto-link any users joining the group
     if (message.new_chat_members?.length) {
       for (const member of message.new_chat_members) {
-        await ctx.runMutation(api.groups.autoLinkUser, {
-          telegramId: member.id,
-          firstName: member.first_name,
-          username: member.username,
-          chatId,
-        });
+        try {
+          await ctx.runMutation(api.groups.autoLinkUser, {
+            telegramId: member.id,
+            firstName: member.first_name,
+            username: member.username,
+            chatId,
+            chatTitle: message.chat?.title,
+          });
+        } catch { /* non-fatal */ }
       }
     }
 
@@ -125,17 +136,60 @@ http.route({
       );
     } else if (cmd === "/streaks") {
       await send("🔥 Streak tracking coming soon! Keep logging daily to build your streak.");
+    } else if (cmd === "/scan") {
+      if (chatType === "private") {
+        await send("⚠️ Use /scan in a group chat to scan members into the leaderboard.");
+      } else {
+        await ctx.runMutation(api.groups.scanUsersIntoGroup, {
+          chatId,
+          chatTitle: message.chat?.title,
+        });
+        await send("✅ Scanning group members into the leaderboard...");
+      }
     } else if (cmd === "/workout") {
-      const appUrl = chatType === "private"
-        ? "https://kesakuntoon.viet.fi"
-        : `https://kesakuntoon.viet.fi/?startapp=${chatId}`;
-      await send("Let's get fit! 💪 Track your progress:", {
-        reply_markup: {
-          inline_keyboard: [[
-            { text: "Open Workout Tracker 🏋️", web_app: { url: appUrl } }
-          ]]
-        }
+      if (chatType === "private") {
+        await send("Let's get fit! 💪 Track your progress:", {
+          reply_markup: {
+            inline_keyboard: [[
+              { text: "Open Workout Tracker 🏋️", web_app: { url: "https://kesakuntoon.viet.fi" } },
+            ]]
+          }
+        });
+      } else {
+        await send(`💪 To open the workout tracker:\n\nTap <b>KesäkuntoonBot</b> at the top of the chat → <b>Open App</b>`);
+      }
+    } else if (cmd === "/setmenubutton" || cmd === "/sendmenubutton") {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/setChatMenuButton`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          menu_button: {
+            type: "web_app",
+            text: "Workout Tracker 🏋️",
+            web_app: { url: "https://kesakuntoon.viet.fi" },
+          },
+        }),
       });
+      const j: any = await res.json();
+      await send(j.ok ? "✅ Menu button set for this group!" : `❌ Failed: ${j.description}`);
+    } else if (cmd === "/setcommands") {
+      const commands = [
+        { command: "workout", description: "Open the workout tracker app" },
+        { command: "leaderboard", description: "Today's top performers" },
+        { command: "goals", description: "Everyone's progress toward goals" },
+        { command: "stats", description: "Community total reps" },
+        { command: "streaks", description: "Daily streak leaderboard" },
+        { command: "scan", description: "Scan group members into the leaderboard" },
+        { command: "help", description: "Show available commands" },
+      ];
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/setMyCommands`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commands }),
+      });
+      const j: any = await res.json();
+      await send(j.ok ? "✅ Commands updated!" : `❌ Failed: ${j.description}`);
     } else if (cmd === "/help" || cmd === "/start") {
       await send(
         `👋 <b>Kesakuntoon Bot</b>\n\nAvailable commands:\n` +
@@ -144,6 +198,7 @@ http.route({
         `/goals — Everyone's progress toward goals\n` +
         `/stats — Community total reps\n` +
         `/streaks — Daily streak leaderboard\n` +
+        `/scan — Scan group members into the leaderboard\n` +
         `/help — This message`
       );
     }
@@ -174,6 +229,66 @@ http.route({
         }),
       }
     );
+    const json = await res.json();
+    return new Response(JSON.stringify(json, null, 2), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+// Manually trigger group user scan: GET /scan-group?chat_id=<chatId>
+// Use this to retroactively link all known users to a group.
+http.route({
+  path: "/scan-group",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const url = new URL(request.url);
+    const chatIdStr = url.searchParams.get("chat_id");
+    if (!chatIdStr) return new Response("Missing chat_id param", { status: 400 });
+    const chatId = parseInt(chatIdStr, 10);
+    if (isNaN(chatId)) return new Response("Invalid chat_id", { status: 400 });
+
+    // Fetch chat title via Telegram API
+    const botToken = process.env.BOT_TOKEN;
+    let chatTitle: string | undefined;
+    if (botToken) {
+      try {
+        const res = await fetch(`https://api.telegram.org/bot${botToken}/getChat?chat_id=${chatId}`);
+        const data: any = await res.json();
+        chatTitle = data?.result?.title;
+      } catch { /* ignore */ }
+    }
+
+    await ctx.runMutation(api.groups.scanUsersIntoGroup, { chatId, chatTitle });
+    return new Response(JSON.stringify({ ok: true, chatId, chatTitle }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+// Set bot commands: GET /set-commands
+http.route({
+  path: "/set-commands",
+  method: "GET",
+  handler: httpAction(async (_ctx, _request) => {
+    const botToken = process.env.BOT_TOKEN;
+    if (!botToken) return new Response("BOT_TOKEN missing", { status: 500 });
+
+    const commands = [
+      { command: "workout", description: "Open the workout tracker app" },
+      { command: "leaderboard", description: "Today's top performers" },
+      { command: "goals", description: "Everyone's progress toward goals" },
+      { command: "stats", description: "Community total reps" },
+      { command: "streaks", description: "Daily streak leaderboard" },
+      { command: "scan", description: "Scan group members into the leaderboard" },
+      { command: "help", description: "Show available commands" },
+    ];
+
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/setMyCommands`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ commands }),
+    });
     const json = await res.json();
     return new Response(JSON.stringify(json, null, 2), {
       headers: { "Content-Type": "application/json" },

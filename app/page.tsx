@@ -339,9 +339,12 @@ export default function Home() {
   const recentWorkouts = useQuery(api.workouts.getRecentWorkouts, telegramId ? { telegramId } : "skip");
   const myTargets = useQuery(api.workouts.getMyTargets, telegramId ? { telegramId } : "skip");
   const weeklyStats = useQuery(api.workouts.getMyWeeklyStats, telegramId ? { telegramId } : "skip");
-  // Skip leaderboard query in solo (DM) mode — no chatId available
-  const leaderboard = useQuery(api.workouts.getLeaderboard, chatId ? { chatId } : "skip");
   const myGroups = useQuery(api.groups.getMyGroups, telegramId ? { telegramId } : "skip");
+  const [selectedChatId, setSelectedChatId] = useState<number | null>(null);
+  // effectiveChatId: prefer URL/launch chatId, fall back to user-selected group
+  const effectiveChatId = chatId ?? selectedChatId;
+  // Skip leaderboard query in solo (DM) mode — no chatId available
+  const leaderboard = useQuery(api.workouts.getLeaderboard, effectiveChatId ? { chatId: effectiveChatId } : "skip");
 
   const logWorkoutMutation = useMutation(api.workouts.logWorkout);
   const setMyTargetsMutation = useMutation(api.workouts.setMyTargets);
@@ -368,8 +371,8 @@ export default function Home() {
         initData: rawInitData,
         type,
         count: sliderValues[type],
-        // Pass chatId to associate workout with the group; undefined = solo mode
-        ...(chatId !== null ? { chatId } : {}),
+        // Pass effectiveChatId to associate workout with the group; undefined = solo mode
+        ...(effectiveChatId !== null ? { chatId: effectiveChatId } : {}),
       })));
       addLog(`Saved: ${entries.map(t => `${sliderValues[t]} ${t}s`).join(", ")}`);
     } catch (err: any) {
@@ -420,6 +423,11 @@ export default function Home() {
       <p className="font-bold border-b border-gray-700 mb-2">Debug Console</p>
       <div className="space-y-1">
         <p>User ID: {telegramId || "None"}</p>
+        <p>Chat ID: {chatId !== null ? String(chatId) : "null (solo mode)"}</p>
+        <p>Start Param: {startParam || "none"}</p>
+        <p>initData.chat: {lp?.initData?.chat?.id ? String(lp.initData.chat.id) : "none"}</p>
+        <p>Selected Group: {selectedChatId !== null ? String(selectedChatId) : "none"}</p>
+        <p>Effective Chat ID: {effectiveChatId !== null ? String(effectiveChatId) : "null (solo)"}</p>
         <p>Convex URL: {process.env.NEXT_PUBLIC_CONVEX_URL ? "Set" : "Missing"}</p>
         <div className="border-t border-gray-800 mt-2 pt-2 max-h-32 overflow-y-auto">
           {debugLogs.map((l, i) => <p key={i}>{l}</p>)}
@@ -506,18 +514,49 @@ export default function Home() {
               <span className={`text-xs ${t.textMuted} font-medium uppercase mb-1`}>{cfg.label}</span>
               <span className={`text-3xl font-bold ${isHype ? hypeText : t.textPrimary}`}>{count}</span>
               <span className={`text-xs ${t.textMuted} mt-0.5`}>/ {target}</span>
-              <div className={`w-full ${t.progressTrack} rounded-full h-1.5 mt-2`}>
-                <div className={`${cfg.color} h-1.5 rounded-full transition-all`} style={{ width: `${pct}%` }} />
-              </div>
-              {isHype && (
-                <span className={`text-xs font-semibold mt-2 ${hypeText} text-center leading-tight`}>
-                  {pickHype(type)}
-                </span>
+              {isHype ? (
+                <span className="text-2xl mt-2">🏆</span>
+              ) : (
+                <div className={`w-full ${t.progressTrack} rounded-full h-1.5 mt-2`}>
+                  <div className={`${cfg.color} h-1.5 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                </div>
               )}
             </div>
           );
         })}
       </div>
+
+      {/* Group Selector — shown when opened outside a group but user has groups */}
+      {chatId === null && myGroups && myGroups.length > 0 && (
+        <div className={`w-full max-w-md mb-6 ${t.card} rounded-xl border ${t.border} p-4`}>
+          <p className={`text-sm font-semibold ${t.textPrimary} mb-1`}>Log to group leaderboard</p>
+          <p className={`text-xs ${t.textMuted} mb-3`}>Select a group to post your workout there</p>
+          <div className="flex flex-wrap gap-2">
+            {myGroups.map((g: any) => {
+              const isSelected = selectedChatId === g.chatId;
+              return (
+                <button
+                  key={g.chatId}
+                  onClick={() => setSelectedChatId(isSelected ? null : g.chatId)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition active:scale-95 ${
+                    isSelected
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : `${t.border} ${t.textSecond} hover:border-blue-500 hover:text-blue-500`
+                  }`}
+                >
+                  {g.chatTitle ?? `Group ${g.chatId}`}
+                  {isSelected && " ✓"}
+                </button>
+              );
+            })}
+          </div>
+          {selectedChatId && (
+            <p className={`text-xs mt-2 text-blue-500`}>
+              Workouts will be posted to the selected group
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Actions — Drum Pickers */}
       <div className={`w-full max-w-md ${t.card} rounded-xl shadow-sm border ${t.border} p-4 mb-8`}>
@@ -594,8 +633,8 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Leaderboard — only shown in group mode; hidden in solo (DM) mode */}
-      {chatId ? (
+      {/* Leaderboard — shown in group mode (effectiveChatId set); otherwise show My Groups list */}
+      {effectiveChatId ? (
         <LeaderboardSection leaderboard={leaderboard} t={t} exerciseConfig={exerciseConfig} />
       ) : (
         <div className="w-full max-w-md mb-8">
@@ -611,7 +650,7 @@ export default function Home() {
               <div key={g.chatId} className={`px-4 py-3 flex items-center justify-between border-b ${t.divider} last:border-0`}>
                 <div className="flex items-center gap-2">
                   <span className="text-base">👥</span>
-                  <span className={`font-medium ${t.textPrimary} text-sm`}>Group {g.chatId}</span>
+                  <span className={`font-medium ${t.textPrimary} text-sm`}>{g.chatTitle ?? `Group ${g.chatId}`}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   {g.activeToday > 0 && (

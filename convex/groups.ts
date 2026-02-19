@@ -31,6 +31,7 @@ export const getMyGroups = query({
         const activeToday = new Set(workouts.map((w: any) => w.userId.toString())).size;
         return {
           chatId: m.chatId,
+          chatTitle: m.chatTitle,
           joinedAt: m.joinedAt,
           activeToday,
         };
@@ -47,6 +48,7 @@ export const autoLinkUser = mutation({
     firstName: v.string(),
     username: v.optional(v.string()),
     chatId: v.number(),
+    chatTitle: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
     const user = await ctx.db
@@ -66,9 +68,13 @@ export const autoLinkUser = mutation({
     if (!existingMembership) {
       await ctx.db.insert("groupMembers", {
         chatId: args.chatId,
+        chatTitle: args.chatTitle,
         userId: user._id,
         joinedAt: Date.now(),
       });
+    } else if (args.chatTitle && existingMembership.chatTitle !== args.chatTitle) {
+      // Update title if it changed
+      await ctx.db.patch(existingMembership._id, { chatTitle: args.chatTitle });
     }
   },
 });
@@ -78,6 +84,7 @@ export const autoLinkUser = mutation({
 export const scanUsersIntoGroup = mutation({
   args: {
     chatId: v.number(),
+    chatTitle: v.optional(v.string()),
   },
   handler: async (ctx: any, args: any) => {
     const botToken = process.env.BOT_TOKEN;
@@ -108,9 +115,12 @@ export const scanUsersIntoGroup = mutation({
         if (!existingMembership) {
           await ctx.db.insert("groupMembers", {
             chatId: args.chatId,
+            chatTitle: args.chatTitle,
             userId: user._id,
             joinedAt: Date.now(),
           });
+        } else if (args.chatTitle && existingMembership.chatTitle !== args.chatTitle) {
+          await ctx.db.patch(existingMembership._id, { chatTitle: args.chatTitle });
         }
       }
     }

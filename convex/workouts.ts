@@ -247,41 +247,47 @@ export const getMyWeeklyStats = query({
   },
 });
 
-// Get leaderboard: per-exercise counts for today, scoped to a specific group chat
+// Get leaderboard: per-exercise counts for today, for all members of a group (regardless of chatId on workout)
 export const getLeaderboard = query({
   args: { chatId: v.number() },
   handler: async (ctx: any, args: any) => {
     const today = new Date().toISOString().split("T")[0];
-    // Use by_chat_date index to fetch only this group's workouts for today
-    const workouts = await ctx.db
-      .query("workouts")
-      .withIndex("by_chat_date", (q: any) => q.eq("chatId", args.chatId).eq("date", today))
+
+    // 1. Get all members of this group
+    const members = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_chat", (q: any) => q.eq("chatId", args.chatId))
       .collect();
 
-    const byUser: Record<string, { pushup: number; squat: number; situp: number }> = {};
-    for (const w of workouts) {
-      const id = w.userId.toString();
-      if (!byUser[id]) byUser[id] = { pushup: 0, squat: 0, situp: 0 };
-      byUser[id][w.type as "pushup" | "squat" | "situp"] += w.count;
+    if (!members.length) return [];
+
+    // 2. For each member, fetch today's workouts (regardless of chatId)
+    const results: Record<string, { pushup: number; squat: number; situp: number; name: string; telegramId: number }> = {};
+
+    for (const member of members) {
+      const user = await ctx.db.get(member.userId);
+      if (!user) continue;
+
+      const workouts = await ctx.db
+        .query("workouts")
+        .withIndex("by_user_date", (q: any) => q.eq("userId", member.userId).eq("date", today))
+        .collect();
+
+      const counts = { pushup: 0, squat: 0, situp: 0 };
+      for (const w of workouts) {
+        counts[w.type as "pushup" | "squat" | "situp"] += w.count;
+      }
+
+      if (counts.pushup + counts.squat + counts.situp > 0) {
+        results[member.userId.toString()] = {
+          name: user.firstName,
+          telegramId: user.telegramId,
+          ...counts,
+        };
+      }
     }
 
-    const users = await ctx.db.query("users").collect();
-    const entries = users
-      .filter((u: any) => byUser[u._id.toString()])
-      .map((u: any) => {
-        const counts = byUser[u._id.toString()] ?? { pushup: 0, squat: 0, situp: 0 };
-        return {
-          name: u.firstName,
-          telegramId: u.telegramId,
-          pushup: counts.pushup,
-          squat: counts.squat,
-          situp: counts.situp,
-          total: counts.pushup + counts.squat + counts.situp,
-        };
-      })
-      .filter((u: any) => u.total > 0);
-
-    return entries;
+    return Object.values(results).map((r) => ({ ...r, total: r.pushup + r.squat + r.situp }));
   },
 });
 
@@ -290,35 +296,44 @@ export const getGoalsProgress = query({
   args: { chatId: v.number() },
   handler: async (ctx: any, args: any) => {
     const today = new Date().toISOString().split("T")[0];
-    // Use by_chat_date index to fetch only this group's workouts for today
-    const workouts = await ctx.db
-      .query("workouts")
-      .withIndex("by_chat_date", (q: any) => q.eq("chatId", args.chatId).eq("date", today))
+
+    // 1. Get all members of this group
+    const members = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_chat", (q: any) => q.eq("chatId", args.chatId))
       .collect();
 
-    const byUser: Record<string, { pushup: number; squat: number; situp: number }> = {};
-    for (const w of workouts) {
-      const id = w.userId.toString();
-      if (!byUser[id]) byUser[id] = { pushup: 0, squat: 0, situp: 0 };
-      byUser[id][w.type as "pushup" | "squat" | "situp"] += w.count;
+    if (!members.length) return [];
+
+    // 2. For each member, fetch today's workouts (regardless of chatId)
+    const entries = [];
+    for (const member of members) {
+      const user = await ctx.db.get(member.userId);
+      if (!user) continue;
+
+      const workouts = await ctx.db
+        .query("workouts")
+        .withIndex("by_user_date", (q: any) => q.eq("userId", member.userId).eq("date", today))
+        .collect();
+
+      const done = { pushup: 0, squat: 0, situp: 0 };
+      for (const w of workouts) {
+        done[w.type as "pushup" | "squat" | "situp"] += w.count;
+      }
+
+      entries.push({
+        name: user.firstName,
+        telegramId: user.telegramId,
+        pushup: done.pushup,
+        squat: done.squat,
+        situp: done.situp,
+        targetPushup: user.targetPushup ?? 50,
+        targetSquat: user.targetSquat ?? 50,
+        targetSitup: user.targetSitup ?? 50,
+      });
     }
 
-    const users = await ctx.db.query("users").collect();
-    return users
-      .filter((u: any) => byUser[u._id.toString()])
-      .map((u: any) => {
-        const done = byUser[u._id.toString()];
-        return {
-          name: u.firstName,
-          telegramId: u.telegramId,
-          pushup: done.pushup,
-          squat: done.squat,
-          situp: done.situp,
-          targetPushup: u.targetPushup ?? 50,
-          targetSquat: u.targetSquat ?? 50,
-          targetSitup: u.targetSitup ?? 50,
-        };
-      });
+    return entries;
   },
 });
 
