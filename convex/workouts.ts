@@ -205,7 +205,7 @@ export const getMyWeeklyStats = query({
   },
 });
 
-// Get leaderboard: all users' total reps for today
+// Get leaderboard: per-exercise counts for today, per user
 export const getLeaderboard = query({
   args: {},
   handler: async (ctx: any) => {
@@ -215,24 +215,30 @@ export const getLeaderboard = query({
       .withIndex("by_date", (q: any) => q.eq("date", today))
       .collect();
 
-    const userTotals: Record<string, number> = {};
+    const byUser: Record<string, { pushup: number; squat: number; situp: number }> = {};
     for (const w of workouts) {
       const id = w.userId.toString();
-      userTotals[id] = (userTotals[id] || 0) + w.count;
+      if (!byUser[id]) byUser[id] = { pushup: 0, squat: 0, situp: 0 };
+      byUser[id][w.type as "pushup" | "squat" | "situp"] += w.count;
     }
 
     const users = await ctx.db.query("users").collect();
-    const leaderboard = users
-      .filter((u: any) => userTotals[u._id.toString()])
-      .map((u: any) => ({
-        name: u.firstName,
-        total: userTotals[u._id.toString()] || 0,
-        telegramId: u.telegramId,
-      }))
-      .sort((a: any, b: any) => b.total - a.total)
-      .slice(0, 10);
+    const entries = users
+      .filter((u: any) => byUser[u._id.toString()])
+      .map((u: any) => {
+        const counts = byUser[u._id.toString()] ?? { pushup: 0, squat: 0, situp: 0 };
+        return {
+          name: u.firstName,
+          telegramId: u.telegramId,
+          pushup: counts.pushup,
+          squat: counts.squat,
+          situp: counts.situp,
+          total: counts.pushup + counts.squat + counts.situp,
+        };
+      })
+      .filter((u: any) => u.total > 0);
 
-    return leaderboard;
+    return entries;
   },
 });
 

@@ -42,10 +42,19 @@ http.route({
         await send("No workouts logged today yet. Be the first! 💪");
       } else {
         const medals = ["🥇", "🥈", "🥉"];
-        const lines = board.map((u, i) =>
-          `${medals[i] ?? `${i + 1}.`} <b>${escapeHtml(u.name)}</b> — ${u.total} reps`
+        const section = (title: string, key: "pushup" | "squat" | "situp") => {
+          const sorted = [...board].sort((a, b) => (b[key] ?? 0) - (a[key] ?? 0)).filter(u => u[key] > 0);
+          if (!sorted.length) return `${title}\n<i>No entries yet</i>`;
+          return title + "\n" + sorted.map((u, i) =>
+            `${medals[i] ?? `${i + 1}.`} <b>${escapeHtml(u.name)}</b> — ${u[key]} reps`
+          ).join("\n");
+        };
+        await send(
+          `🏆 <b>Today's Leaderboard</b>\n\n` +
+          section("💪 <b>Pushups</b>", "pushup") + "\n\n" +
+          section("🦵 <b>Squats</b>",  "squat")  + "\n\n" +
+          section("🔥 <b>Situps</b>",  "situp")
         );
-        await send(`🏆 <b>Today's Leaderboard</b>\n\n${lines.join("\n")}`);
       }
     } else if (cmd === "/goals" || cmd === "/progress") {
       // Show goal completion % for all users who have logged today

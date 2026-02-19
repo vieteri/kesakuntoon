@@ -179,6 +179,67 @@ const THEMES = {
 
 type ThemeKey = keyof typeof THEMES;
 
+const MEDALS = ["🥇", "🥈", "🥉"];
+
+function LeaderboardSection({ leaderboard, t, exerciseConfig }: {
+  leaderboard: any[] | undefined;
+  t: (typeof THEMES)[ThemeKey];
+  exerciseConfig: Record<string, { label: string; color: string; accentHex: string }>;
+}) {
+  const [activeTab, setActiveTab] = useState<"pushup" | "squat" | "situp">("pushup");
+  const tabs: { key: "pushup" | "squat" | "situp"; label: string }[] = [
+    { key: "pushup", label: "Pushups" },
+    { key: "squat",  label: "Squats"  },
+    { key: "situp",  label: "Situps"  },
+  ];
+
+  const sorted = leaderboard
+    ? [...leaderboard].sort((a, b) => (b[activeTab] ?? 0) - (a[activeTab] ?? 0)).filter(u => u[activeTab] > 0)
+    : undefined;
+
+  const cfg = exerciseConfig[activeTab];
+
+  return (
+    <div className="w-full max-w-md mb-8">
+      <h2 className={`text-lg font-semibold ${t.textSecond} mb-3`}>Today's Leaderboard</h2>
+      {/* Tabs */}
+      <div className={`flex rounded-xl overflow-hidden border ${t.border} mb-0`}>
+        {tabs.map((tab) => {
+          const isActive = tab.key === activeTab;
+          const tabCfg = exerciseConfig[tab.key];
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex-1 py-2 text-sm font-semibold transition ${
+                isActive
+                  ? `${tabCfg.color} text-white`
+                  : `${t.card} ${t.textSecond}`
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+      <div className={`${t.card} rounded-b-xl border-x border-b ${t.border} overflow-hidden`}>
+        {!sorted ? (
+          <div className={`p-4 text-center ${t.textMuted}`}>Loading...</div>
+        ) : sorted.length === 0 ? (
+          <div className={`p-4 text-center ${t.textMuted}`}>No {cfg.label.toLowerCase()} logged today.</div>
+        ) : sorted.map((u: any, i: number) => (
+          <div key={u.telegramId} className={`px-4 py-3 flex items-center gap-3 border-b ${t.divider} last:border-0`}>
+            <span className="text-lg w-7 text-center shrink-0">{MEDALS[i] ?? `${i + 1}`}</span>
+            <span className={`flex-1 font-medium ${t.textPrimary} truncate`}>{u.name}</span>
+            <span className="font-bold tabular-nums" style={{ color: cfg.accentHex }}>{u[activeTab]}</span>
+            <span className={`text-xs ${t.textMuted}`}>reps</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ErrorFallback({ error }: { error: any }) {
   return (
     <div className="p-4 bg-[#1a0a0a] text-red-400 min-h-screen flex flex-col items-center justify-center">
@@ -522,26 +583,7 @@ export default function Home() {
       </div>
 
       {/* Leaderboard */}
-      <div className="w-full max-w-md mb-8">
-        <h2 className={`text-lg font-semibold ${t.textSecond} mb-3`}>Today's Leaderboard</h2>
-        <div className={`${t.card} rounded-xl border ${t.border} overflow-hidden`}>
-          {!leaderboard ? (
-            <div className={`p-4 text-center ${t.textMuted}`}>Loading...</div>
-          ) : leaderboard.length === 0 ? (
-            <div className={`p-4 text-center ${t.textMuted}`}>No one has logged yet today.</div>
-          ) : leaderboard.map((u: any, i: number) => {
-            const medals = ["🥇", "🥈", "🥉"];
-            return (
-              <div key={u.telegramId} className={`px-4 py-3 flex items-center gap-3 border-b ${t.divider} last:border-0`}>
-                <span className="text-lg w-7 text-center">{medals[i] ?? `${i + 1}`}</span>
-                <span className={`flex-1 font-medium ${t.textPrimary}`}>{u.name}</span>
-                <span className={`font-bold tabular-nums ${t.textPrimary}`}>{u.total}</span>
-                <span className={`text-xs ${t.textMuted}`}>reps</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <LeaderboardSection leaderboard={leaderboard} t={t} exerciseConfig={exerciseConfig} />
 
       {/* Recent Logs */}
       <div className="w-full max-w-md mb-8">
