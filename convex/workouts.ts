@@ -242,6 +242,42 @@ export const getLeaderboard = query({
   },
 });
 
+// Get all users' today progress vs their personal targets (for /goals bot command)
+export const getGoalsProgress = query({
+  args: {},
+  handler: async (ctx: any) => {
+    const today = new Date().toISOString().split("T")[0];
+    const workouts = await ctx.db
+      .query("workouts")
+      .withIndex("by_date", (q: any) => q.eq("date", today))
+      .collect();
+
+    const byUser: Record<string, { pushup: number; squat: number; situp: number }> = {};
+    for (const w of workouts) {
+      const id = w.userId.toString();
+      if (!byUser[id]) byUser[id] = { pushup: 0, squat: 0, situp: 0 };
+      byUser[id][w.type as "pushup" | "squat" | "situp"] += w.count;
+    }
+
+    const users = await ctx.db.query("users").collect();
+    return users
+      .filter((u: any) => byUser[u._id.toString()])
+      .map((u: any) => {
+        const done = byUser[u._id.toString()];
+        return {
+          name: u.firstName,
+          telegramId: u.telegramId,
+          pushup:       done.pushup,
+          squat:        done.squat,
+          situp:        done.situp,
+          targetPushup: u.targetPushup ?? 50,
+          targetSquat:  u.targetSquat  ?? 50,
+          targetSitup:  u.targetSitup  ?? 50,
+        };
+      });
+  },
+});
+
 // Get targets for a user
 export const getMyTargets = query({
   args: {

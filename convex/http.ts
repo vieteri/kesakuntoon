@@ -57,17 +57,23 @@ http.route({
         );
       }
     } else if (cmd === "/goals" || cmd === "/progress") {
-      // Show goal completion % for all users who have logged today
-      const today = new Date().toISOString().split("T")[0];
-      const board: any[] = await ctx.runQuery(api.workouts.getLeaderboard);
-      if (!board.length) {
+      const progress: any[] = await ctx.runQuery(api.workouts.getGoalsProgress);
+      if (!progress.length) {
         await send("No workouts logged today yet. Start now! 🏃");
       } else {
-        const lines = board.map((u) => {
-          const bar = progressBar(Math.min(100, Math.round((u.total / 150) * 100)));
-          return `<b>${escapeHtml(u.name)}</b>\n${bar} ${u.total} reps`;
+        const lines = progress.map((u) => {
+          const pct = (done: number, target: number) =>
+            Math.min(100, target > 0 ? Math.round((done / target) * 100) : 100);
+          const line = (emoji: string, label: string, done: number, target: number) =>
+            `${emoji} ${label}: ${done}/${target} ${progressBar(pct(done, target))}`;
+          return (
+            `<b>${escapeHtml(u.name)}</b>\n` +
+            line("💪", "Pushups", u.pushup, u.targetPushup) + "\n" +
+            line("🦵", "Squats",  u.squat,  u.targetSquat)  + "\n" +
+            line("🔥", "Situps",  u.situp,  u.targetSitup)
+          );
         });
-        await send(`📊 <b>Today's Progress</b>\n\n${lines.join("\n\n")}`);
+        await send(`📊 <b>Today's Goals</b>\n\n${lines.join("\n\n")}`);
       }
     } else if (cmd === "/stats" || cmd === "/week") {
       // Community weekly totals
