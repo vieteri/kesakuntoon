@@ -11,6 +11,19 @@ const PAD = (CONTAINER_H - ITEM_H) / 2;
 const MIN_VAL = 0;
 const MAX_VAL = 200;
 
+function hapticTick() {
+  // Telegram WebApp haptic (iOS + Android via Telegram)
+  try {
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg?.HapticFeedback) {
+      tg.HapticFeedback.impactOccurred("light");
+      return;
+    }
+  } catch {}
+  // Fallback: Web Vibration API (Android browsers)
+  try { navigator.vibrate?.(6); } catch {}
+}
+
 function DrumPicker({
   value,
   onChange,
@@ -25,6 +38,7 @@ function DrumPicker({
   const containerRef = useRef<HTMLDivElement>(null);
   const isScrollingRef = useRef(false);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastHapticValueRef = useRef(value);
 
   const scrollToValue = useCallback((val: number, smooth: boolean) => {
     const el = containerRef.current;
@@ -50,21 +64,31 @@ function DrumPicker({
     if (!el) return;
     isScrollingRef.current = true;
 
+    // Fire haptic on each integer tick while scrolling
+    const currentRaw = Math.round(el.scrollTop / ITEM_H) + MIN_VAL;
+    const clamped = Math.max(MIN_VAL, Math.min(MAX_VAL, currentRaw));
+    if (clamped !== lastHapticValueRef.current) {
+      lastHapticValueRef.current = clamped;
+      hapticTick();
+    }
+
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     scrollTimeoutRef.current = setTimeout(() => {
       isScrollingRef.current = false;
       const raw = Math.round(el.scrollTop / ITEM_H) + MIN_VAL;
-      const clamped = Math.max(MIN_VAL, Math.min(MAX_VAL, raw));
-      // Snap
-      el.scrollTo({ top: (clamped - MIN_VAL) * ITEM_H, behavior: "smooth" });
-      onChange(clamped);
+      const snapped = Math.max(MIN_VAL, Math.min(MAX_VAL, raw));
+      el.scrollTo({ top: (snapped - MIN_VAL) * ITEM_H, behavior: "smooth" });
+      onChange(snapped);
     }, 80);
   };
 
   const items = Array.from({ length: MAX_VAL - MIN_VAL + 1 }, (_, i) => i + MIN_VAL);
 
   return (
-    <div className="relative select-none" style={{ width: 72, height: CONTAINER_H }}>
+    <div
+      className="relative select-none"
+      style={{ width: 80, height: CONTAINER_H, overflow: "hidden" }}
+    >
       {/* Highlight stripe */}
       <div
         className="absolute left-0 right-0 pointer-events-none z-10 rounded-lg"
@@ -72,27 +96,32 @@ function DrumPicker({
           top: PAD,
           height: ITEM_H,
           border: `2px solid ${accentColor}`,
-          background: `${accentColor}18`,
+          background: `${accentColor}15`,
         }}
       />
-      {/* Scroll container */}
+      {/* Scroll container — touch-action: pan-y prevents horizontal drift */}
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="absolute inset-0 overflow-y-scroll"
-        style={{ scrollSnapType: "y mandatory", scrollbarWidth: "none" }}
+        className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
+        style={{
+          scrollSnapType: "y mandatory",
+          scrollbarWidth: "none",
+          touchAction: "pan-y",
+          WebkitOverflowScrolling: "touch",
+        } as React.CSSProperties}
       >
-        {/* top padding spacer */}
         <div style={{ height: PAD }} />
         {items.map((n) => {
           const dist = Math.abs(n - value);
-          const opacity = dist === 0 ? 1 : dist === 1 ? 0.5 : dist === 2 ? 0.25 : 0.1;
-          const scale = dist === 0 ? 1.25 : 1;
+          const opacity = dist === 0 ? 1 : dist === 1 ? 0.45 : dist === 2 ? 0.2 : 0.08;
+          const fontSize = dist === 0 ? 24 : dist === 1 ? 17 : 15;
           return (
             <div
               key={n}
               onClick={() => {
                 if (disabled) return;
+                hapticTick();
                 onChange(n);
                 scrollToValue(n, true);
               }}
@@ -104,18 +133,18 @@ function DrumPicker({
                 justifyContent: "center",
                 cursor: disabled ? "default" : "pointer",
                 opacity,
-                transform: `scale(${scale})`,
-                transition: "opacity 0.15s, transform 0.15s",
+                transition: "opacity 0.1s, font-size 0.1s",
                 fontWeight: dist === 0 ? 700 : 400,
-                fontSize: dist === 0 ? 22 : 16,
-                color: dist === 0 ? accentColor : "#374151",
+                fontSize,
+                fontVariantNumeric: "tabular-nums",
+                color: dist === 0 ? accentColor : "#6b7280",
+                letterSpacing: dist === 0 ? "-0.5px" : "0",
               }}
             >
               {n}
             </div>
           );
         })}
-        {/* bottom padding spacer */}
         <div style={{ height: PAD }} />
       </div>
       {/* Fade top */}
@@ -123,7 +152,7 @@ function DrumPicker({
         className="absolute top-0 left-0 right-0 pointer-events-none z-20"
         style={{
           height: PAD,
-          background: "linear-gradient(to bottom, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 100%)",
+          background: "linear-gradient(to bottom, rgba(255,255,255,1) 20%, rgba(255,255,255,0) 100%)",
         }}
       />
       {/* Fade bottom */}
@@ -131,7 +160,7 @@ function DrumPicker({
         className="absolute bottom-0 left-0 right-0 pointer-events-none z-20"
         style={{
           height: PAD,
-          background: "linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 100%)",
+          background: "linear-gradient(to top, rgba(255,255,255,1) 20%, rgba(255,255,255,0) 100%)",
         }}
       />
     </div>
