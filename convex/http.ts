@@ -116,8 +116,10 @@ http.route({
           const lines = progress.map((u) => {
             const pct = (done: number, target: number) =>
               Math.min(100, target > 0 ? Math.round((done / target) * 100) : 100);
-            const line = (emoji: string, label: string, done: number, target: number) =>
-              `${emoji} ${label}: ${done}/${target} ${progressBar(pct(done, target))}`;
+            const line = (emoji: string, label: string, done: number, target: number) => {
+              const p = pct(done, target);
+              return `${emoji} ${label}: ${done}/${target} ${p >= 100 ? "🏆" : progressBar(p)}`;
+            };
             return (
               `<b>${escapeHtml(u.name)}</b>\n` +
               line("💪", "Pushups", u.pushup, u.targetPushup) + "\n" +
