@@ -2,6 +2,10 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { validateTelegramWebAppData } from "./auth";
 
+function escapeHtml(s: string) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 const VALID_WORKOUT_TYPES = ["pushup", "squat", "situp"];
 
 // Log a new workout (and create user if not exists)
@@ -93,6 +97,24 @@ export const logWorkout = mutation({
       timestamp: Date.now(),
       ...(args.chatId !== undefined ? { chatId: args.chatId } : {}),
     });
+
+    // 5. Announce to group if chatId provided
+    if (args.chatId !== undefined) {
+      const typeEmoji: Record<string, string> = { pushup: "💪", squat: "🦵", situp: "🔥" };
+      const typeLabel: Record<string, string> = { pushup: "pushups", squat: "squats", situp: "situps" };
+      const emoji = typeEmoji[args.type] ?? "🏋️";
+      const label = typeLabel[args.type] ?? args.type;
+      const name = username ? `@${username}` : firstName;
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: args.chatId,
+          text: `${emoji} <b>${escapeHtml(name)}</b> just did <b>${args.count} ${label}</b>!`,
+          parse_mode: "HTML",
+        }),
+      });
+    }
 
     return { success: true, userId };
   },

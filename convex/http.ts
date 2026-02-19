@@ -29,11 +29,11 @@ http.route({
     const text: string = message.text || "";
     const cmd = text.split("@")[0].trim(); // strip bot username suffix
 
-    const send = async (msg: string, parseMode = "HTML") => {
+    const send = async (msg: string, extra: Record<string, unknown> = {}, parseMode = "HTML") => {
       await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: parseMode }),
+        body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: parseMode, ...extra }),
       });
     };
 
@@ -92,9 +92,18 @@ http.route({
       );
     } else if (cmd === "/streaks") {
       await send("🔥 Streak tracking coming soon! Keep logging daily to build your streak.");
+    } else if (cmd === "/workout") {
+      await send("Let's get fit! 💪 Track your progress:", {
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "Open Workout Tracker 🏋️", web_app: { url: "https://kesakuntoon.viet.fi" } }
+          ]]
+        }
+      });
     } else if (cmd === "/help" || cmd === "/start") {
       await send(
         `👋 <b>Kesakuntoon Bot</b>\n\nAvailable commands:\n` +
+        `/workout — Open the workout tracker app\n` +
         `/leaderboard — Today's top performers\n` +
         `/goals — Everyone's progress toward goals\n` +
         `/stats — Community total reps\n` +
