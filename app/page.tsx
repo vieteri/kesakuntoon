@@ -327,8 +327,11 @@ export default function Home() {
   const user = lp?.initData?.user;
   const telegramId = user?.id;
   const rawInitData = lp?.initDataRaw;
-  // chatId is present when the mini app is opened from a group chat button; undefined in DMs
-  const chatId: number | null = lp?.initData?.chat?.id ?? null;
+  // chatId: from chat.id (inline button launch) or start_param (menu button from group via /workout)
+  const startParam = lp?.initData?.start_param;
+  const chatId: number | null =
+    lp?.initData?.chat?.id ??
+    (startParam ? parseInt(startParam, 10) || null : null);
 
   // 4. CONVEX HOOKS
   const todayStats = useQuery(api.workouts.getMyTodayStats, telegramId ? { telegramId } : "skip");

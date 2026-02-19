@@ -93,10 +93,13 @@ http.route({
     } else if (cmd === "/streaks") {
       await send("🔥 Streak tracking coming soon! Keep logging daily to build your streak.");
     } else if (cmd === "/workout") {
+      const appUrl = chatType === "private"
+        ? "https://kesakuntoon.viet.fi"
+        : `https://kesakuntoon.viet.fi/?startapp=${chatId}`;
       await send("Let's get fit! 💪 Track your progress:", {
         reply_markup: {
           inline_keyboard: [[
-            { text: "Open Workout Tracker 🏋️", web_app: { url: "https://kesakuntoon.viet.fi" } }
+            { text: "Open Workout Tracker 🏋️", web_app: { url: appUrl } }
           ]]
         }
       });
