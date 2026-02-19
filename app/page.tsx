@@ -12,15 +12,10 @@ const MIN_VAL = 0;
 const MAX_VAL = 200;
 
 function hapticTick() {
-  // Telegram WebApp haptic (iOS + Android via Telegram)
   try {
     const tg = (window as any).Telegram?.WebApp;
-    if (tg?.HapticFeedback) {
-      tg.HapticFeedback.impactOccurred("light");
-      return;
-    }
+    if (tg?.HapticFeedback) { tg.HapticFeedback.impactOccurred("light"); return; }
   } catch {}
-  // Fallback: Web Vibration API (Android browsers)
   try { navigator.vibrate?.(6); } catch {}
 }
 
@@ -29,11 +24,13 @@ function DrumPicker({
   onChange,
   accentColor,
   disabled,
+  cardBg,
 }: {
   value: number;
   onChange: (v: number) => void;
   accentColor: string;
   disabled: boolean;
+  cardBg: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isScrollingRef = useRef(false);
@@ -46,32 +43,25 @@ function DrumPicker({
     el.scrollTo({ top: (val - MIN_VAL) * ITEM_H, behavior: smooth ? "smooth" : "instant" });
   }, []);
 
-  // Scroll to initial value on mount (no animation)
   useEffect(() => {
     scrollToValue(value, false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync scroll when value changes externally
   useEffect(() => {
-    if (!isScrollingRef.current) {
-      scrollToValue(value, true);
-    }
+    if (!isScrollingRef.current) scrollToValue(value, true);
   }, [value, scrollToValue]);
 
   const handleScroll = () => {
     const el = containerRef.current;
     if (!el) return;
     isScrollingRef.current = true;
-
-    // Fire haptic on each integer tick while scrolling
     const currentRaw = Math.round(el.scrollTop / ITEM_H) + MIN_VAL;
     const clamped = Math.max(MIN_VAL, Math.min(MAX_VAL, currentRaw));
     if (clamped !== lastHapticValueRef.current) {
       lastHapticValueRef.current = clamped;
       hapticTick();
     }
-
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     scrollTimeoutRef.current = setTimeout(() => {
       isScrollingRef.current = false;
@@ -85,31 +75,18 @@ function DrumPicker({
   const items = Array.from({ length: MAX_VAL - MIN_VAL + 1 }, (_, i) => i + MIN_VAL);
 
   return (
-    <div
-      className="relative select-none"
-      style={{ width: 80, height: CONTAINER_H, overflow: "hidden" }}
-    >
+    <div className="relative select-none" style={{ width: 80, height: CONTAINER_H, overflow: "hidden" }}>
       {/* Highlight stripe */}
       <div
         className="absolute left-0 right-0 pointer-events-none z-10 rounded-lg"
-        style={{
-          top: PAD,
-          height: ITEM_H,
-          border: `2px solid ${accentColor}`,
-          background: `${accentColor}15`,
-        }}
+        style={{ top: PAD, height: ITEM_H, border: `2px solid ${accentColor}`, background: `${accentColor}15` }}
       />
-      {/* Scroll container — touch-action: pan-y prevents horizontal drift */}
+      {/* Scroll container */}
       <div
         ref={containerRef}
         onScroll={handleScroll}
         className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
-        style={{
-          scrollSnapType: "y mandatory",
-          scrollbarWidth: "none",
-          touchAction: "pan-y",
-          WebkitOverflowScrolling: "touch",
-        } as React.CSSProperties}
+        style={{ scrollSnapType: "y mandatory", scrollbarWidth: "none", touchAction: "pan-y", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
       >
         <div style={{ height: PAD }} />
         {items.map((n) => {
@@ -119,25 +96,13 @@ function DrumPicker({
           return (
             <div
               key={n}
-              onClick={() => {
-                if (disabled) return;
-                hapticTick();
-                onChange(n);
-                scrollToValue(n, true);
-              }}
+              onClick={() => { if (disabled) return; hapticTick(); onChange(n); scrollToValue(n, true); }}
               style={{
-                height: ITEM_H,
-                scrollSnapAlign: "center",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: disabled ? "default" : "pointer",
-                opacity,
-                transition: "opacity 0.1s, font-size 0.1s",
-                fontWeight: dist === 0 ? 700 : 400,
-                fontSize,
-                fontVariantNumeric: "tabular-nums",
-                color: dist === 0 ? accentColor : "#6b7280",
+                height: ITEM_H, scrollSnapAlign: "center", display: "flex", alignItems: "center",
+                justifyContent: "center", cursor: disabled ? "default" : "pointer", opacity,
+                transition: "opacity 0.1s, font-size 0.1s", fontWeight: dist === 0 ? 700 : 400,
+                fontSize, fontVariantNumeric: "tabular-nums",
+                color: dist === 0 ? accentColor : "#71717a",
                 letterSpacing: dist === 0 ? "-0.5px" : "0",
               }}
             >
@@ -147,25 +112,13 @@ function DrumPicker({
         })}
         <div style={{ height: PAD }} />
       </div>
-      {/* Fade top */}
-      <div
-        className="absolute top-0 left-0 right-0 pointer-events-none z-20"
-        style={{
-          height: PAD,
-          background: "linear-gradient(to bottom, rgba(255,255,255,1) 20%, rgba(255,255,255,0) 100%)",
-        }}
-      />
-      {/* Fade bottom */}
-      <div
-        className="absolute bottom-0 left-0 right-0 pointer-events-none z-20"
-        style={{
-          height: PAD,
-          background: "linear-gradient(to top, rgba(255,255,255,1) 20%, rgba(255,255,255,0) 100%)",
-        }}
-      />
+      {/* Fades */}
+      <div className="absolute top-0 left-0 right-0 pointer-events-none z-20" style={{ height: PAD, background: `linear-gradient(to bottom, ${cardBg} 20%, transparent 100%)` }} />
+      <div className="absolute bottom-0 left-0 right-0 pointer-events-none z-20" style={{ height: PAD, background: `linear-gradient(to top, ${cardBg} 20%, transparent 100%)` }} />
     </div>
   );
 }
+
 // Remove static import of Telegram SDK
 // import { retrieveLaunchParams } from "@telegram-apps/sdk-react";
 
@@ -177,18 +130,60 @@ const HYPE_MESSAGES = {
   situp:  ["Core of iron!", "Six-pack loading!", "Abs are made today!"],
 };
 
-// Simple Error Boundary Component
+// Theme tokens
+const THEMES = {
+  dark: {
+    bg:           "bg-[#0f0f0f]",
+    card:         "bg-[#1a1a1a]",
+    cardBg:       "#1a1a1a",
+    border:       "border-[#2a2a2a]",
+    borderHype:   { pushup: "border-blue-500", squat: "border-green-500", situp: "border-orange-500" },
+    divider:      "border-[#222]",
+    textPrimary:  "text-[#f0f0f0]",
+    textSecond:   "text-zinc-400",
+    textMuted:    "text-zinc-600",
+    textAccent:   { pushup: "text-blue-400", squat: "text-green-400", situp: "text-orange-400" },
+    inputBg:      "bg-[#111] border-[#333] text-[#f0f0f0]",
+    settingsBtn:  "hover:bg-[#222] active:scale-95",
+    saveBtn:      "bg-[#f0f0f0] text-[#0f0f0f]",
+    cancelBtn:    "border-[#333] text-zinc-300",
+    editBtn:      "text-zinc-500 hover:text-blue-400 hover:bg-blue-950",
+    deleteBtn:    "text-zinc-500 hover:text-red-400 hover:bg-red-950",
+    modalBg:      "bg-[#1a1a1a]",
+    progressTrack:"bg-[#2a2a2a]",
+  },
+  light: {
+    bg:           "bg-gray-50",
+    card:         "bg-white",
+    cardBg:       "#ffffff",
+    border:       "border-gray-100",
+    borderHype:   { pushup: "border-blue-400", squat: "border-green-400", situp: "border-orange-400" },
+    divider:      "border-gray-50",
+    textPrimary:  "text-gray-900",
+    textSecond:   "text-gray-500",
+    textMuted:    "text-gray-400",
+    textAccent:   { pushup: "text-blue-600", squat: "text-green-600", situp: "text-orange-500" },
+    inputBg:      "bg-white border-gray-300 text-gray-900",
+    settingsBtn:  "hover:bg-gray-200 active:scale-95",
+    saveBtn:      "bg-gray-800 text-white",
+    cancelBtn:    "border-gray-300 text-gray-700",
+    editBtn:      "text-gray-400 hover:text-blue-500 hover:bg-blue-50",
+    deleteBtn:    "text-gray-400 hover:text-red-500 hover:bg-red-50",
+    modalBg:      "bg-white",
+    progressTrack:"bg-gray-100",
+  },
+} as const;
+
+type ThemeKey = keyof typeof THEMES;
+
 function ErrorFallback({ error }: { error: any }) {
   return (
-    <div className="p-4 bg-red-50 text-red-900 min-h-screen flex flex-col items-center justify-center">
+    <div className="p-4 bg-[#1a0a0a] text-red-400 min-h-screen flex flex-col items-center justify-center">
       <h2 className="text-lg font-bold mb-2">Something went wrong</h2>
-      <pre className="text-xs bg-red-100 p-2 rounded overflow-auto max-w-full">
+      <pre className="text-xs bg-[#2a1010] p-2 rounded overflow-auto max-w-full">
         {error?.message || JSON.stringify(error)}
       </pre>
-      <button
-        onClick={() => window.location.reload()}
-        className="mt-4 px-4 py-2 bg-red-600 text-white rounded"
-      >
+      <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-red-600 text-white rounded">
         Reload
       </button>
     </div>
@@ -204,295 +199,253 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false);
   const [draftTargets, setDraftTargets] = useState({ pushup: "", squat: "", situp: "" });
   const [savingTargets, setSavingTargets] = useState(false);
+  const [theme, setTheme] = useState<ThemeKey>("dark");
 
-  // Helper to add logs
+  const t = THEMES[theme];
+
   const addLog = (msg: string) => setDebugLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
 
-    // Initialize Eruda
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            import('eruda').then(eruda => eruda.default.init());
-        }
-    }, []);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      import('eruda').then(eruda => eruda.default.init());
+    }
+  }, []);
 
-    // 2. INITIALIZATION EFFECT
-    useEffect(() => {
+  // 2. INITIALIZATION EFFECT
+  useEffect(() => {
     setIsMounted(true);
     addLog("App mounted");
 
     const initTelegram = async () => {
-        try {
-            if (typeof window !== 'undefined') {
-                // Wait for Telegram WebApp script to load (max 5 seconds)
-                let attempts = 0;
-                while (!(window as any).Telegram?.WebApp && attempts < 50) {
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    attempts++;
-                }
-
-                const tgWebApp = (window as any).Telegram?.WebApp;
-
-                if (!tgWebApp) {
-                    addLog("Not in Telegram (window.Telegram.WebApp missing after waiting)");
-                    return;
-                }
-
-                addLog("Telegram WebApp detected!");
-                addLog(`Platform: ${tgWebApp.platform}`);
-                addLog(`Version: ${tgWebApp.version}`);
-
-                // Initialize the WebApp
-                tgWebApp.ready();
-                addLog("WebApp.ready() called");
-
-                // Get user data from init data
-                const initData = tgWebApp.initData;
-                const initDataUnsafe = tgWebApp.initDataUnsafe;
-
-                addLog(`Init data exists: ${!!initData}`);
-                addLog(`User: ${JSON.stringify(initDataUnsafe?.user)}`);
-
-                if (initDataUnsafe?.user) {
-                    setLp({
-                        initData: initDataUnsafe,
-                        initDataRaw: initData
-                    });
-                    addLog("User data set successfully");
-                } else {
-                    addLog("No user data in initDataUnsafe");
-                }
-            }
-        } catch (e: any) {
-            addLog(`CRITICAL INIT ERROR: ${e.message}`);
-            console.error("Telegram init error:", e);
+      try {
+        if (typeof window !== 'undefined') {
+          let attempts = 0;
+          while (!(window as any).Telegram?.WebApp && attempts < 50) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+          }
+          const tgWebApp = (window as any).Telegram?.WebApp;
+          if (!tgWebApp) { addLog("Not in Telegram (window.Telegram.WebApp missing after waiting)"); return; }
+          addLog("Telegram WebApp detected!");
+          addLog(`Platform: ${tgWebApp.platform}`);
+          addLog(`Version: ${tgWebApp.version}`);
+          tgWebApp.ready();
+          addLog("WebApp.ready() called");
+          const initData = tgWebApp.initData;
+          const initDataUnsafe = tgWebApp.initDataUnsafe;
+          addLog(`Init data exists: ${!!initData}`);
+          addLog(`User: ${JSON.stringify(initDataUnsafe?.user)}`);
+          if (initDataUnsafe?.user) {
+            setLp({ initData: initDataUnsafe, initDataRaw: initData });
+            addLog("User data set successfully");
+          } else {
+            addLog("No user data in initDataUnsafe");
+          }
         }
+      } catch (e: any) {
+        addLog(`CRITICAL INIT ERROR: ${e.message}`);
+        console.error("Telegram init error:", e);
+      }
     };
 
     initTelegram();
   }, []);
 
-    // 3. DERIVED STATE
-    // Check if we have valid user data before accessing
-    const user = lp?.initData?.user;
-    const telegramId = user?.id;
-    const rawInitData = lp?.initDataRaw;
+  // 3. DERIVED STATE
+  const user = lp?.initData?.user;
+  const telegramId = user?.id;
+  const rawInitData = lp?.initDataRaw;
 
-    // 4. CONVEX HOOKS (Only run if we have an ID to avoid unnecessary queries)
-    // We use "skip" if no ID, so these shouldn't crash
-    const todayStats = useQuery(api.workouts.getMyTodayStats, telegramId ? { telegramId } : "skip");
-    const globalStats = useQuery(api.workouts.getGlobalStats);
-    const recentWorkouts = useQuery(api.workouts.getRecentWorkouts, telegramId ? { telegramId } : "skip");
-    const myTargets = useQuery(api.workouts.getMyTargets, telegramId ? { telegramId } : "skip");
+  // 4. CONVEX HOOKS
+  const todayStats    = useQuery(api.workouts.getMyTodayStats, telegramId ? { telegramId } : "skip");
+  const globalStats   = useQuery(api.workouts.getGlobalStats);
+  const recentWorkouts = useQuery(api.workouts.getRecentWorkouts, telegramId ? { telegramId } : "skip");
+  const myTargets     = useQuery(api.workouts.getMyTargets, telegramId ? { telegramId } : "skip");
 
-    const logWorkoutMutation = useMutation(api.workouts.logWorkout);
-    const setMyTargetsMutation = useMutation(api.workouts.setMyTargets);
-    const deleteWorkoutMutation = useMutation(api.workouts.deleteWorkout);
-    const editWorkoutMutation = useMutation(api.workouts.editWorkout);
-    const [logging, setLogging] = useState<string | null>(null);
-    const [sliderValues, setSliderValues] = useState({ pushup: 10, squat: 10, situp: 10 });
-    const [deletingId, setDeletingId] = useState<string | null>(null);
-    const [editingLog, setEditingLog] = useState<{ id: string; type: string; count: number } | null>(null);
-    const [editCount, setEditCount] = useState("");
+  const logWorkoutMutation    = useMutation(api.workouts.logWorkout);
+  const setMyTargetsMutation  = useMutation(api.workouts.setMyTargets);
+  const deleteWorkoutMutation = useMutation(api.workouts.deleteWorkout);
+  const editWorkoutMutation   = useMutation(api.workouts.editWorkout);
+  const [logging, setLogging] = useState<string | null>(null);
+  const [sliderValues, setSliderValues] = useState({ pushup: 10, squat: 10, situp: 10 });
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingLog, setEditingLog] = useState<{ id: string; type: string; count: number } | null>(null);
+  const [editCount, setEditCount] = useState("");
 
-    // Resolved targets (fall back to defaults if not set)
-    const targets = {
-      pushup: myTargets?.targetPushup ?? DEFAULT_TARGETS.pushup,
-      squat:  myTargets?.targetSquat  ?? DEFAULT_TARGETS.squat,
-      situp:  myTargets?.targetSitup  ?? DEFAULT_TARGETS.situp,
-    };
+  const targets = {
+    pushup: myTargets?.targetPushup ?? DEFAULT_TARGETS.pushup,
+    squat:  myTargets?.targetSquat  ?? DEFAULT_TARGETS.squat,
+    situp:  myTargets?.targetSitup  ?? DEFAULT_TARGETS.situp,
+  };
 
-    const handleSave = async () => {
-      if (!telegramId || !rawInitData) {
-        alert("Cannot log: Missing Telegram data");
-        return;
-      }
-      setLogging("saving");
-      try {
-        const entries = (["pushup", "squat", "situp"] as const).filter(t => sliderValues[t] > 0);
-        await Promise.all(entries.map(type =>
-          logWorkoutMutation({ initData: rawInitData, type, count: sliderValues[type] })
-        ));
-        addLog(`Saved: ${entries.map(t => `${sliderValues[t]} ${t}s`).join(", ")}`);
-      } catch (err: any) {
-        addLog(`Save failed: ${err.message}`);
-        alert("Failed to save. See debug info.");
-      } finally {
-        setLogging(null);
-      }
-    };
-
-    const openSettings = () => {
-      setDraftTargets({
-        pushup: String(targets.pushup),
-        squat:  String(targets.squat),
-        situp:  String(targets.situp),
-      });
-      setShowSettings(true);
-    };
-
-    const handleSaveTargets = async () => {
-      if (!rawInitData) {
-        alert("Cannot save: Missing Telegram data");
-        return;
-      }
-      const p = Number(draftTargets.pushup);
-      const sq = Number(draftTargets.squat);
-      const si = Number(draftTargets.situp);
-      if ([p, sq, si].some(n => !Number.isInteger(n) || n < 1 || n > 9999)) {
-        alert("Each target must be a whole number between 1 and 9999");
-        return;
-      }
-      setSavingTargets(true);
-      try {
-        await setMyTargetsMutation({ initData: rawInitData, targetPushup: p, targetSquat: sq, targetSitup: si });
-        setShowSettings(false);
-      } catch (err: any) {
-        alert(`Failed to save: ${err.message}`);
-      } finally {
-        setSavingTargets(false);
-      }
-    };
-
-    // 5. RENDER
-    // Only access properties if we have data to prevent crashes
-    if (error) return <ErrorFallback error={error} />;
-
-    // Prevent hydration mismatch by showing simple loading state until client mount
-    if (!isMounted) return (
-        <div className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-50">
-            <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mb-4"></div>
-            <p className="text-gray-400 text-sm">Loading Kesakuntoon...</p>
-        </div>
-    );
-
-    // Render the debug UI if something is wrong or just for visibility
-    const DebugUI = () => (
-      <div className="mt-8 p-4 bg-gray-900 text-green-400 font-mono text-xs rounded w-full max-w-md overflow-hidden">
-          <p className="font-bold border-b border-gray-700 mb-2">Debug Console</p>
-          <div className="space-y-1">
-              <p>User ID: {telegramId || "None"}</p>
-              <p>Convex URL: {process.env.NEXT_PUBLIC_CONVEX_URL ? "Set" : "Missing"}</p>
-              <div className="border-t border-gray-800 mt-2 pt-2 max-h-32 overflow-y-auto">
-                  {debugLogs.map((l, i) => <p key={i}>{l}</p>)}
-              </div>
-          </div>
-      </div>
-    );
-
-    // If we are not in Telegram (no user ID), show a friendly message + Debug
-    if (!telegramId) {
-        return (
-          <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-50 text-gray-900 font-sans">
-               <h1 className="text-2xl font-bold mb-2">Kesakuntoon</h1>
-               <p className="text-gray-500 mb-4">Please open this app in Telegram.</p>
-               <DebugUI />
-          </main>
-        )
+  const handleSave = async () => {
+    if (!telegramId || !rawInitData) { alert("Cannot log: Missing Telegram data"); return; }
+    setLogging("saving");
+    try {
+      const entries = (["pushup", "squat", "situp"] as const).filter(t => sliderValues[t] > 0);
+      await Promise.all(entries.map(type => logWorkoutMutation({ initData: rawInitData, type, count: sliderValues[type] })));
+      addLog(`Saved: ${entries.map(t => `${sliderValues[t]} ${t}s`).join(", ")}`);
+    } catch (err: any) {
+      addLog(`Save failed: ${err.message}`);
+      alert("Failed to save. See debug info.");
+    } finally {
+      setLogging(null);
     }
+  };
 
-    // Safely access stats with fallback values
-    const pushups = todayStats?.pushup || 0;
-    const squats = todayStats?.squat || 0;
-    const situps = todayStats?.situp || 0;
-    const totalCommunity = globalStats?.totalCount ? globalStats.totalCount.toLocaleString() : "...";
+  const openSettings = () => {
+    setDraftTargets({ pushup: String(targets.pushup), squat: String(targets.squat), situp: String(targets.situp) });
+    setShowSettings(true);
+  };
 
-    // Hype logic
-    const hype = {
-      pushup: pushups >= targets.pushup,
-      squat:  squats  >= targets.squat,
-      situp:  situps  >= targets.situp,
-    };
-    const todayStr = new Date().toISOString().split("T")[0];
-    const pickHype = (type: string) => {
-      const msgs = HYPE_MESSAGES[type as keyof typeof HYPE_MESSAGES];
-      const idx = todayStr.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % msgs.length;
-      return msgs[idx];
-    };
+  const handleSaveTargets = async () => {
+    if (!rawInitData) { alert("Cannot save: Missing Telegram data"); return; }
+    const p = Number(draftTargets.pushup);
+    const sq = Number(draftTargets.squat);
+    const si = Number(draftTargets.situp);
+    if ([p, sq, si].some(n => !Number.isInteger(n) || n < 1 || n > 9999)) {
+      alert("Each target must be a whole number between 1 and 9999");
+      return;
+    }
+    setSavingTargets(true);
+    try {
+      await setMyTargetsMutation({ initData: rawInitData, targetPushup: p, targetSquat: sq, targetSitup: si });
+      setShowSettings(false);
+    } catch (err: any) {
+      alert(`Failed to save: ${err.message}`);
+    } finally {
+      setSavingTargets(false);
+    }
+  };
 
-    // Per-exercise styles
-    const exerciseConfig = {
-      pushup: { label: "Pushups", color: "bg-blue-500",  border: "border-blue-400",  text: "text-blue-600" },
-      squat:  { label: "Squats",  color: "bg-green-500", border: "border-green-400", text: "text-green-600" },
-      situp:  { label: "Situps",  color: "bg-orange-500",border: "border-orange-400",text: "text-orange-500" },
-    };
-    const statEntries: { type: keyof typeof exerciseConfig; count: number }[] = [
-      { type: "pushup", count: pushups },
-      { type: "squat",  count: squats },
-      { type: "situp",  count: situps },
-    ];
+  // 5. RENDER
+  if (error) return <ErrorFallback error={error} />;
 
-    // Main Dashboard
-    return (
-      <main className="flex min-h-screen flex-col items-center p-6 bg-gray-50 text-gray-900 font-sans">
-        <header className="w-full max-w-md mb-8 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">Hi, {user?.first_name}!</h1>
-            <p className="text-sm text-gray-500">Today's Progress</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Community Total</p>
-              <p className="text-xl font-bold text-blue-600">
-                {totalCommunity}
-              </p>
-            </div>
-            <button
-              onClick={openSettings}
-              className="text-xl p-1 rounded-lg hover:bg-gray-200 active:scale-95 transition"
-              aria-label="Settings"
-            >
-              ⚙️
-            </button>
-          </div>
-        </header>
+  if (!isMounted) return (
+    <div className={`flex min-h-screen flex-col items-center justify-center p-6 ${t.bg}`}>
+      <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mb-4" />
+      <p className={`${t.textSecond} text-sm`}>Loading Kesakuntoon...</p>
+    </div>
+  );
 
-        {/* Stats Grid */}
-        <div className="w-full max-w-md grid grid-cols-3 gap-3 mb-8">
-          {statEntries.map(({ type, count }) => {
-            const cfg = exerciseConfig[type];
-            const target = targets[type];
-            const pct = Math.min(100, target > 0 ? Math.round((count / target) * 100) : 100);
-            const isHype = hype[type];
-            return (
-              <div
-                key={type}
-                className={`bg-white p-4 rounded-xl shadow-sm border-2 flex flex-col items-center ${isHype ? cfg.border : "border-gray-100"}`}
-              >
-                <span className="text-xs text-gray-400 font-medium uppercase mb-1">{cfg.label}</span>
-                <span className={`text-3xl font-bold ${isHype ? cfg.text : "text-gray-800"}`}>{count}</span>
-                <span className="text-xs text-gray-400 mt-0.5">/ {target}</span>
-                {/* Progress bar */}
-                <div className="w-full bg-gray-100 rounded-full h-1.5 mt-2">
-                  <div
-                    className={`${cfg.color} h-1.5 rounded-full transition-all`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-                {isHype && (
-                  <span className={`text-xs font-semibold mt-2 ${cfg.text} text-center leading-tight`}>
-                    {pickHype(type)}
-                  </span>
-                )}
-              </div>
-            );
-          })}
+  const DebugUI = () => (
+    <div className="mt-8 p-4 bg-gray-900 text-green-400 font-mono text-xs rounded w-full max-w-md overflow-hidden">
+      <p className="font-bold border-b border-gray-700 mb-2">Debug Console</p>
+      <div className="space-y-1">
+        <p>User ID: {telegramId || "None"}</p>
+        <p>Convex URL: {process.env.NEXT_PUBLIC_CONVEX_URL ? "Set" : "Missing"}</p>
+        <div className="border-t border-gray-800 mt-2 pt-2 max-h-32 overflow-y-auto">
+          {debugLogs.map((l, i) => <p key={i}>{l}</p>)}
         </div>
+      </div>
+    </div>
+  );
 
+  if (!telegramId) {
+    return (
+      <main className={`flex min-h-screen flex-col items-center justify-center p-6 ${t.bg} ${t.textPrimary} font-sans`}>
+        <h1 className="text-2xl font-bold mb-2">Kesakuntoon</h1>
+        <p className={`${t.textSecond} mb-4`}>Please open this app in Telegram.</p>
+        <DebugUI />
+      </main>
+    );
+  }
+
+  const pushups = todayStats?.pushup || 0;
+  const squats  = todayStats?.squat  || 0;
+  const situps  = todayStats?.situp  || 0;
+  const totalCommunity = globalStats?.totalCount ? globalStats.totalCount.toLocaleString() : "...";
+
+  const hype = {
+    pushup: pushups >= targets.pushup,
+    squat:  squats  >= targets.squat,
+    situp:  situps  >= targets.situp,
+  };
+  const todayStr = new Date().toISOString().split("T")[0];
+  const pickHype = (type: string) => {
+    const msgs = HYPE_MESSAGES[type as keyof typeof HYPE_MESSAGES];
+    return msgs[todayStr.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % msgs.length];
+  };
+
+  const exerciseConfig = {
+    pushup: { label: "Pushups", color: "bg-blue-500",   accentHex: "#2563eb" },
+    squat:  { label: "Squats",  color: "bg-green-500",  accentHex: "#16a34a" },
+    situp:  { label: "Situps",  color: "bg-orange-500", accentHex: "#f97316" },
+  };
+  const statEntries: { type: keyof typeof exerciseConfig; count: number }[] = [
+    { type: "pushup", count: pushups },
+    { type: "squat",  count: squats },
+    { type: "situp",  count: situps },
+  ];
+
+  return (
+    <main className={`flex min-h-screen flex-col items-center p-6 ${t.bg} ${t.textPrimary} font-sans`}>
+
+      {/* Header */}
+      <header className="w-full max-w-md mb-8 flex justify-between items-center">
+        <div>
+          <h1 className={`text-2xl font-bold ${t.textPrimary}`}>Hi, {user?.first_name}!</h1>
+          <p className={`text-sm ${t.textSecond}`}>Today's Progress</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <p className={`text-xs ${t.textSecond} uppercase tracking-wide`}>Community Total</p>
+            <p className="text-xl font-bold text-blue-500">{totalCommunity}</p>
+          </div>
+          <button
+            onClick={openSettings}
+            className={`text-xl p-1 rounded-lg transition ${t.settingsBtn}`}
+            aria-label="Settings"
+          >
+            ⚙️
+          </button>
+        </div>
+      </header>
+
+      {/* Stats Grid */}
+      <div className="w-full max-w-md grid grid-cols-3 gap-3 mb-8">
+        {statEntries.map(({ type, count }) => {
+          const cfg = exerciseConfig[type];
+          const target = targets[type];
+          const pct = Math.min(100, target > 0 ? Math.round((count / target) * 100) : 100);
+          const isHype = hype[type];
+          const hypeText = t.textAccent[type];
+          const hypeBorder = t.borderHype[type];
+          return (
+            <div
+              key={type}
+              className={`${t.card} p-4 rounded-xl shadow-sm border-2 flex flex-col items-center ${isHype ? hypeBorder : t.border}`}
+            >
+              <span className={`text-xs ${t.textMuted} font-medium uppercase mb-1`}>{cfg.label}</span>
+              <span className={`text-3xl font-bold ${isHype ? hypeText : t.textPrimary}`}>{count}</span>
+              <span className={`text-xs ${t.textMuted} mt-0.5`}>/ {target}</span>
+              <div className={`w-full ${t.progressTrack} rounded-full h-1.5 mt-2`}>
+                <div className={`${cfg.color} h-1.5 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+              </div>
+              {isHype && (
+                <span className={`text-xs font-semibold mt-2 ${hypeText} text-center leading-tight`}>
+                  {pickHype(type)}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
 
       {/* Actions — Drum Pickers */}
-      <div className="w-full max-w-md bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-8">
+      <div className={`w-full max-w-md ${t.card} rounded-xl shadow-sm border ${t.border} p-4 mb-8`}>
         <div className="flex justify-around mb-4">
           {(["pushup", "squat", "situp"] as const).map((type) => {
             const cfg = exerciseConfig[type];
-            const accentColor = type === "pushup" ? "#2563eb" : type === "squat" ? "#16a34a" : "#f97316";
             return (
               <div key={type} className="flex flex-col items-center gap-2">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{cfg.label}</span>
+                <span className={`text-xs font-semibold ${t.textSecond} uppercase tracking-wide`}>{cfg.label}</span>
                 <DrumPicker
                   value={sliderValues[type]}
                   onChange={(v) => setSliderValues(prev => ({ ...prev, [type]: v }))}
-                  accentColor={accentColor}
+                  accentColor={cfg.accentHex}
                   disabled={!!logging}
+                  cardBg={t.cardBg}
                 />
               </div>
             );
@@ -501,37 +454,39 @@ export default function Home() {
         <button
           onClick={handleSave}
           disabled={!!logging}
-          className="w-full py-3 bg-gray-800 text-white rounded-xl font-bold shadow-sm active:scale-95 transition disabled:opacity-60"
+          className={`w-full py-3 ${t.saveBtn} rounded-xl font-bold shadow-sm active:scale-95 transition disabled:opacity-60`}
         >
           {logging === "saving" ? "Saving..." : "Save All"}
         </button>
       </div>
 
-      {/* Recent Activity */}
+      {/* Recent Logs */}
       <div className="w-full max-w-md mb-8">
-        <h2 className="text-lg font-semibold text-gray-700 mb-3">Recent Logs</h2>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <h2 className={`text-lg font-semibold ${t.textSecond} mb-3`}>Recent Logs</h2>
+        <div className={`${t.card} rounded-xl shadow-sm border ${t.border} overflow-hidden`}>
           {!recentWorkouts ? (
-            <div className="p-4 text-center text-gray-400">Loading...</div>
+            <div className={`p-4 text-center ${t.textMuted}`}>Loading...</div>
           ) : recentWorkouts.length === 0 ? (
-            <div className="p-4 text-center text-gray-400">No logs yet.</div>
+            <div className={`p-4 text-center ${t.textMuted}`}>No logs yet.</div>
           ) : recentWorkouts.map((w: any) => {
             const cfg = exerciseConfig[w.type as keyof typeof exerciseConfig];
             const isDeleting = deletingId === w._id;
             return (
-              <div key={w._id} className="border-b border-gray-50 last:border-0">
+              <div key={w._id} className={`border-b ${t.divider} last:border-0`}>
                 <div className="px-4 py-3 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full ${cfg?.color ?? "bg-gray-400"} text-white shrink-0`}>
                       {w.type}
                     </span>
-                    <span className="font-semibold text-gray-800">{w.count}</span>
-                    <span className="text-gray-400 text-xs">{new Date(w.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                    <span className={`font-semibold ${t.textPrimary}`}>{w.count}</span>
+                    <span className={`${t.textMuted} text-xs`}>
+                      {new Date(w.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       onClick={() => { setEditingLog({ id: w._id, type: w.type, count: w.count }); setEditCount(String(w.count)); }}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 active:scale-90 transition"
+                      className={`p-1.5 rounded-lg active:scale-90 transition ${t.editBtn}`}
                       aria-label="Edit"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -551,7 +506,7 @@ export default function Home() {
                         }
                       }}
                       disabled={isDeleting}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 active:scale-90 transition disabled:opacity-40"
+                      className={`p-1.5 rounded-lg active:scale-90 transition disabled:opacity-40 ${t.deleteBtn}`}
                       aria-label="Delete"
                     >
                       {isDeleting ? (
@@ -576,25 +531,25 @@ export default function Home() {
       {/* Edit Log Modal */}
       {editingLog && (
         <div
-          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6"
+          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6"
           onClick={(e) => { if (e.target === e.currentTarget) setEditingLog(null); }}
         >
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-1 capitalize">Edit {editingLog.type}s</h2>
-            <p className="text-sm text-gray-500 mb-5">Change the rep count for this entry</p>
+          <div className={`${t.modalBg} rounded-2xl shadow-xl w-full max-w-sm p-6`}>
+            <h2 className={`text-xl font-bold ${t.textPrimary} mb-1 capitalize`}>Edit {editingLog.type}s</h2>
+            <p className={`text-sm ${t.textSecond} mb-5`}>Change the rep count for this entry</p>
             <input
               type="number"
               min={1}
               max={9999}
               value={editCount}
               onChange={(e) => setEditCount(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-center text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-400 mb-6"
+              className={`w-full border rounded-lg px-3 py-2 text-center text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 mb-6 ${t.inputBg}`}
               autoFocus
             />
             <div className="flex gap-3">
               <button
                 onClick={() => setEditingLog(null)}
-                className="flex-1 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-semibold"
+                className={`flex-1 py-2.5 border rounded-xl font-semibold ${t.cancelBtn}`}
               >
                 Cancel
               </button>
@@ -602,10 +557,7 @@ export default function Home() {
                 onClick={async () => {
                   if (!rawInitData || !editingLog) return;
                   const n = Number(editCount);
-                  if (!Number.isInteger(n) || n < 1 || n > 9999) {
-                    alert("Enter a number between 1 and 9999");
-                    return;
-                  }
+                  if (!Number.isInteger(n) || n < 1 || n > 9999) { alert("Enter a number between 1 and 9999"); return; }
                   try {
                     await editWorkoutMutation({ initData: rawInitData, workoutId: editingLog.id as any, count: n });
                     setEditingLog(null);
@@ -625,32 +577,45 @@ export default function Home() {
 
       {/* DEBUG TOGGLE */}
       <details className="w-full max-w-md">
-        <summary className="text-xs text-gray-400 cursor-pointer text-center">Show Debug Info</summary>
+        <summary className={`text-xs ${t.textMuted} cursor-pointer text-center`}>Show Debug Info</summary>
         <DebugUI />
       </details>
 
       {/* Settings Modal */}
       {showSettings && (
         <div
-          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6"
+          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6"
           onClick={(e) => { if (e.target === e.currentTarget) setShowSettings(false); }}
         >
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-1">Daily Targets</h2>
-            <p className="text-sm text-gray-500 mb-5">Set your daily rep goals</p>
+          <div className={`${t.modalBg} rounded-2xl shadow-xl w-full max-w-sm p-6`}>
+            <h2 className={`text-xl font-bold ${t.textPrimary} mb-1`}>Settings</h2>
+            <p className={`text-sm ${t.textSecond} mb-5`}>Manage your preferences</p>
 
+            {/* Theme toggle */}
+            <div className={`flex items-center justify-between mb-5 pb-5 border-b ${t.border}`}>
+              <span className={`text-sm font-medium ${t.textPrimary}`}>Dark mode</span>
+              <button
+                onClick={() => setTheme(prev => prev === "dark" ? "light" : "dark")}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${theme === "dark" ? "bg-blue-600" : "bg-zinc-300"}`}
+              >
+                <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${theme === "dark" ? "translate-x-6" : "translate-x-1"}`} />
+              </button>
+            </div>
+
+            {/* Daily Targets */}
+            <p className={`text-sm font-semibold ${t.textPrimary} mb-3`}>Daily Targets</p>
             {(["pushup", "squat", "situp"] as const).map((type) => {
               const cfg = exerciseConfig[type];
               return (
                 <div key={type} className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{cfg.label}</label>
+                  <label className={`block text-sm font-medium ${t.textSecond} mb-1`}>{cfg.label}</label>
                   <input
                     type="number"
                     min={1}
                     max={9999}
                     value={draftTargets[type]}
                     onChange={(e) => setDraftTargets(prev => ({ ...prev, [type]: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${t.inputBg}`}
                   />
                 </div>
               );
@@ -659,7 +624,7 @@ export default function Home() {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowSettings(false)}
-                className="flex-1 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-semibold"
+                className={`flex-1 py-2.5 border rounded-xl font-semibold ${t.cancelBtn}`}
               >
                 Cancel
               </button>
