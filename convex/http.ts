@@ -21,6 +21,17 @@ http.route({
       return new Response("Invalid JSON", { status: 400 });
     }
 
+    // Bot added to a group — scan known users
+    const myChatMember = update?.my_chat_member;
+    if (myChatMember) {
+      const newStatus = myChatMember.new_chat_member?.status;
+      const groupChatId: number = myChatMember.chat?.id;
+      if (groupChatId && (newStatus === "member" || newStatus === "administrator")) {
+        await ctx.runMutation(api.groups.scanUsersIntoGroup, { chatId: groupChatId });
+      }
+      return new Response("OK", { status: 200 });
+    }
+
     const message = update?.message;
     if (!message) return new Response("OK", { status: 200 });
 
@@ -28,6 +39,28 @@ http.route({
     const chatType: string = message.chat?.type || "private";
     const text: string = message.text || "";
     const cmd = text.split("@")[0].trim(); // strip bot username suffix
+
+    // Auto-link sender to group if they're a known app user
+    if (chatType !== "private" && message.from) {
+      await ctx.runMutation(api.groups.autoLinkUser, {
+        telegramId: message.from.id,
+        firstName: message.from.first_name,
+        username: message.from.username,
+        chatId,
+      });
+    }
+
+    // Auto-link any users joining the group
+    if (message.new_chat_members?.length) {
+      for (const member of message.new_chat_members) {
+        await ctx.runMutation(api.groups.autoLinkUser, {
+          telegramId: member.id,
+          firstName: member.first_name,
+          username: member.username,
+          chatId,
+        });
+      }
+    }
 
     const send = async (msg: string, extra: Record<string, unknown> = {}, parseMode = "HTML") => {
       await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -131,7 +164,15 @@ http.route({
     const webhookUrl = `${url.origin}/telegram-webhook`;
 
     const res = await fetch(
-      `https://api.telegram.org/bot${botToken}/setWebhook?url=${encodeURIComponent(webhookUrl)}`
+      `https://api.telegram.org/bot${botToken}/setWebhook`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: webhookUrl,
+          allowed_updates: ["message", "my_chat_member", "chat_member"],
+        }),
+      }
     );
     const json = await res.json();
     return new Response(JSON.stringify(json, null, 2), {

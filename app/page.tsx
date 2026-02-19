@@ -341,6 +341,7 @@ export default function Home() {
   const weeklyStats = useQuery(api.workouts.getMyWeeklyStats, telegramId ? { telegramId } : "skip");
   // Skip leaderboard query in solo (DM) mode — no chatId available
   const leaderboard = useQuery(api.workouts.getLeaderboard, chatId ? { chatId } : "skip");
+  const myGroups = useQuery(api.groups.getMyGroups, telegramId ? { telegramId } : "skip");
 
   const logWorkoutMutation = useMutation(api.workouts.logWorkout);
   const setMyTargetsMutation = useMutation(api.workouts.setMyTargets);
@@ -597,8 +598,34 @@ export default function Home() {
       {chatId ? (
         <LeaderboardSection leaderboard={leaderboard} t={t} exerciseConfig={exerciseConfig} />
       ) : (
-        <div className={`w-full max-w-md mb-8 text-center py-4 ${t.textMuted} text-sm`}>
-          🏋️ Open from a group chat to see the leaderboard
+        <div className="w-full max-w-md mb-8">
+          <h2 className={`text-lg font-semibold ${t.textSecond} mb-3`}>My Groups</h2>
+          <div className={`${t.card} rounded-xl shadow-sm border ${t.border} overflow-hidden`}>
+            {!myGroups ? (
+              <div className={`p-4 text-center ${t.textMuted}`}>Loading...</div>
+            ) : myGroups.length === 0 ? (
+              <div className={`p-4 text-center ${t.textMuted} text-sm`}>
+                🏋️ Open from a group chat to join a group leaderboard
+              </div>
+            ) : myGroups.map((g: any) => (
+              <div key={g.chatId} className={`px-4 py-3 flex items-center justify-between border-b ${t.divider} last:border-0`}>
+                <div className="flex items-center gap-2">
+                  <span className="text-base">👥</span>
+                  <span className={`font-medium ${t.textPrimary} text-sm`}>Group {g.chatId}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {g.activeToday > 0 && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full bg-green-500/15 text-green-500 font-semibold`}>
+                      {g.activeToday} active today
+                    </span>
+                  )}
+                  <span className={`text-xs ${t.textMuted}`}>
+                    joined {new Date(g.joinedAt).toLocaleDateString([], { month: "short", day: "numeric" })}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
