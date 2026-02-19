@@ -8,7 +8,7 @@ const ITEM_H = 40;
 const VISIBLE = 5;
 const CONTAINER_H = ITEM_H * VISIBLE;
 const PAD = (CONTAINER_H - ITEM_H) / 2;
-const MIN_VAL = 1;
+const MIN_VAL = 0;
 const MAX_VAL = 200;
 
 function DrumPicker({
