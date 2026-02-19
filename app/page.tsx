@@ -3,6 +3,9 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+} from "recharts";
 
 const ITEM_H = 40;
 const VISIBLE = 5;
@@ -201,6 +204,15 @@ export default function Home() {
   const [savingTargets, setSavingTargets] = useState(false);
   const [theme, setTheme] = useState<ThemeKey>("dark");
 
+  // Persist theme to localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("theme") as ThemeKey | null;
+    if (saved === "light" || saved === "dark") setTheme(saved);
+  }, []);
+  useEffect(() => {
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
   const t = THEMES[theme];
 
   const addLog = (msg: string) => setDebugLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
@@ -257,10 +269,12 @@ export default function Home() {
   const rawInitData = lp?.initDataRaw;
 
   // 4. CONVEX HOOKS
-  const todayStats    = useQuery(api.workouts.getMyTodayStats, telegramId ? { telegramId } : "skip");
-  const globalStats   = useQuery(api.workouts.getGlobalStats);
+  const todayStats     = useQuery(api.workouts.getMyTodayStats, telegramId ? { telegramId } : "skip");
+  const globalStats    = useQuery(api.workouts.getGlobalStats);
   const recentWorkouts = useQuery(api.workouts.getRecentWorkouts, telegramId ? { telegramId } : "skip");
-  const myTargets     = useQuery(api.workouts.getMyTargets, telegramId ? { telegramId } : "skip");
+  const myTargets      = useQuery(api.workouts.getMyTargets, telegramId ? { telegramId } : "skip");
+  const weeklyStats    = useQuery(api.workouts.getMyWeeklyStats, telegramId ? { telegramId } : "skip");
+  const leaderboard    = useQuery(api.workouts.getLeaderboard);
 
   const logWorkoutMutation    = useMutation(api.workouts.logWorkout);
   const setMyTargetsMutation  = useMutation(api.workouts.setMyTargets);
@@ -458,6 +472,75 @@ export default function Home() {
         >
           {logging === "saving" ? "Saving..." : "Save All"}
         </button>
+      </div>
+
+      {/* Weekly Charts */}
+      <div className="w-full max-w-md mb-8">
+        <h2 className={`text-lg font-semibold ${t.textSecond} mb-3`}>This Week</h2>
+        <div className={`${t.card} rounded-xl border ${t.border} p-4 space-y-6`}>
+          {!weeklyStats ? (
+            <div className={`text-center ${t.textMuted} py-4`}>Loading...</div>
+          ) : (
+            (["pushup", "squat", "situp"] as const).map((type) => {
+              const cfg = exerciseConfig[type];
+              const data = weeklyStats.map((d: any) => ({
+                day: d.date.slice(5), // MM-DD
+                reps: d[type] ?? 0,
+              }));
+              const target = targets[type];
+              return (
+                <div key={type}>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className={`text-sm font-semibold ${t.textPrimary}`}>{cfg.label}</span>
+                    <span className={`text-xs ${t.textMuted}`}>target {target}/day</span>
+                  </div>
+                  <ResponsiveContainer width="100%" height={90}>
+                    <BarChart data={data} barSize={18} margin={{ top: 4, right: 0, left: -28, bottom: 0 }}>
+                      <XAxis dataKey="day" tick={{ fontSize: 10, fill: theme === "dark" ? "#71717a" : "#9ca3af" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: theme === "dark" ? "#71717a" : "#9ca3af" }} axisLine={false} tickLine={false} />
+                      <Tooltip
+                        cursor={{ fill: theme === "dark" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)" }}
+                        contentStyle={{ background: t.cardBg, border: `1px solid ${theme === "dark" ? "#2a2a2a" : "#e5e7eb"}`, borderRadius: 8, fontSize: 12, color: theme === "dark" ? "#f0f0f0" : "#111" }}
+                        formatter={(v: any) => [`${v} reps`, cfg.label]}
+                      />
+                      <Bar dataKey="reps" radius={[4, 4, 0, 0]}>
+                        {data.map((entry, i) => (
+                          <Cell
+                            key={i}
+                            fill={entry.reps >= target ? cfg.accentHex : theme === "dark" ? "#2a2a2a" : "#e5e7eb"}
+                            fillOpacity={entry.reps > 0 ? 1 : 0.4}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Leaderboard */}
+      <div className="w-full max-w-md mb-8">
+        <h2 className={`text-lg font-semibold ${t.textSecond} mb-3`}>Today's Leaderboard</h2>
+        <div className={`${t.card} rounded-xl border ${t.border} overflow-hidden`}>
+          {!leaderboard ? (
+            <div className={`p-4 text-center ${t.textMuted}`}>Loading...</div>
+          ) : leaderboard.length === 0 ? (
+            <div className={`p-4 text-center ${t.textMuted}`}>No one has logged yet today.</div>
+          ) : leaderboard.map((u: any, i: number) => {
+            const medals = ["🥇", "🥈", "🥉"];
+            return (
+              <div key={u.telegramId} className={`px-4 py-3 flex items-center gap-3 border-b ${t.divider} last:border-0`}>
+                <span className="text-lg w-7 text-center">{medals[i] ?? `${i + 1}`}</span>
+                <span className={`flex-1 font-medium ${t.textPrimary}`}>{u.name}</span>
+                <span className={`font-bold tabular-nums ${t.textPrimary}`}>{u.total}</span>
+                <span className={`text-xs ${t.textMuted}`}>reps</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Recent Logs */}

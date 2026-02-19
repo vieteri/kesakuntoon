@@ -172,6 +172,70 @@ export const getRecentWorkouts = query({
   },
 });
 
+// Get last 7 days of stats for a user (for charts)
+export const getMyWeeklyStats = query({
+  args: { telegramId: v.number() },
+  handler: async (ctx: any, args: any) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_telegramId", (q: any) => q.eq("telegramId", args.telegramId))
+      .first();
+    if (!user) return [];
+
+    const days: string[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      days.push(d.toISOString().split("T")[0]);
+    }
+
+    const results = await Promise.all(days.map(async (date) => {
+      const workouts = await ctx.db
+        .query("workouts")
+        .withIndex("by_user_date", (q: any) => q.eq("userId", user._id).eq("date", date))
+        .collect();
+      const totals = workouts.reduce(
+        (acc: any, w: any) => { acc[w.type] = (acc[w.type] || 0) + w.count; return acc; },
+        { pushup: 0, squat: 0, situp: 0 }
+      );
+      return { date, ...totals };
+    }));
+
+    return results;
+  },
+});
+
+// Get leaderboard: all users' total reps for today
+export const getLeaderboard = query({
+  args: {},
+  handler: async (ctx: any) => {
+    const today = new Date().toISOString().split("T")[0];
+    const workouts = await ctx.db
+      .query("workouts")
+      .withIndex("by_date", (q: any) => q.eq("date", today))
+      .collect();
+
+    const userTotals: Record<string, number> = {};
+    for (const w of workouts) {
+      const id = w.userId.toString();
+      userTotals[id] = (userTotals[id] || 0) + w.count;
+    }
+
+    const users = await ctx.db.query("users").collect();
+    const leaderboard = users
+      .filter((u: any) => userTotals[u._id.toString()])
+      .map((u: any) => ({
+        name: u.firstName,
+        total: userTotals[u._id.toString()] || 0,
+        telegramId: u.telegramId,
+      }))
+      .sort((a: any, b: any) => b.total - a.total)
+      .slice(0, 10);
+
+    return leaderboard;
+  },
+});
+
 // Get targets for a user
 export const getMyTargets = query({
   args: {
