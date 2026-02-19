@@ -12,7 +12,8 @@ export const logWorkout = mutation({
     count: v.number(),
     // We can trust date or derive it from server time, but let's keep it for now
     // Actually, usually safer to use server time for logging unless offline sync
-    date: v.optional(v.string()), 
+    date: v.optional(v.string()),
+    chatId: v.optional(v.number()), // undefined = solo mode, number = group chat
   },
   handler: async (ctx: any, args: any) => {
     // 0. Auth Validation
@@ -65,13 +66,32 @@ export const logWorkout = mutation({
       }
     }
 
-    // 3. Log the workout
+    // 3. If chatId provided, auto-join groupMembers (upsert)
+    if (args.chatId !== undefined) {
+      const existingMembership = await ctx.db
+        .query("groupMembers")
+        .withIndex("by_user_chat", (q: any) =>
+          q.eq("userId", userId).eq("chatId", args.chatId)
+        )
+        .first();
+
+      if (!existingMembership) {
+        await ctx.db.insert("groupMembers", {
+          chatId: args.chatId,
+          userId,
+          joinedAt: Date.now(),
+        });
+      }
+    }
+
+    // 4. Log the workout
     await ctx.db.insert("workouts", {
       userId,
       type: args.type,
       count: args.count,
       date: args.date || new Date().toISOString().split("T")[0],
       timestamp: Date.now(),
+      ...(args.chatId !== undefined ? { chatId: args.chatId } : {}),
     });
 
     return { success: true, userId };
@@ -205,14 +225,15 @@ export const getMyWeeklyStats = query({
   },
 });
 
-// Get leaderboard: per-exercise counts for today, per user
+// Get leaderboard: per-exercise counts for today, scoped to a specific group chat
 export const getLeaderboard = query({
-  args: {},
-  handler: async (ctx: any) => {
+  args: { chatId: v.number() },
+  handler: async (ctx: any, args: any) => {
     const today = new Date().toISOString().split("T")[0];
+    // Use by_chat_date index to fetch only this group's workouts for today
     const workouts = await ctx.db
       .query("workouts")
-      .withIndex("by_date", (q: any) => q.eq("date", today))
+      .withIndex("by_chat_date", (q: any) => q.eq("chatId", args.chatId).eq("date", today))
       .collect();
 
     const byUser: Record<string, { pushup: number; squat: number; situp: number }> = {};
@@ -242,14 +263,15 @@ export const getLeaderboard = query({
   },
 });
 
-// Get all users' today progress vs their personal targets (for /goals bot command)
+// Get all group members' today progress vs their personal targets (for /goals bot command)
 export const getGoalsProgress = query({
-  args: {},
-  handler: async (ctx: any) => {
+  args: { chatId: v.number() },
+  handler: async (ctx: any, args: any) => {
     const today = new Date().toISOString().split("T")[0];
+    // Use by_chat_date index to fetch only this group's workouts for today
     const workouts = await ctx.db
       .query("workouts")
-      .withIndex("by_date", (q: any) => q.eq("date", today))
+      .withIndex("by_chat_date", (q: any) => q.eq("chatId", args.chatId).eq("date", today))
       .collect();
 
     const byUser: Record<string, { pushup: number; squat: number; situp: number }> = {};
@@ -267,12 +289,12 @@ export const getGoalsProgress = query({
         return {
           name: u.firstName,
           telegramId: u.telegramId,
-          pushup:       done.pushup,
-          squat:        done.squat,
-          situp:        done.situp,
+          pushup: done.pushup,
+          squat: done.squat,
+          situp: done.situp,
           targetPushup: u.targetPushup ?? 50,
-          targetSquat:  u.targetSquat  ?? 50,
-          targetSitup:  u.targetSitup  ?? 50,
+          targetSquat: u.targetSquat ?? 50,
+          targetSitup: u.targetSitup ?? 50,
         };
       });
   },
@@ -323,8 +345,8 @@ export const setMyTargets = mutation({
     const telegramId = userData.user.id;
 
     if (args.targetPushup < 1 || args.targetPushup > 9999 ||
-        args.targetSquat < 1 || args.targetSquat > 9999 ||
-        args.targetSitup < 1 || args.targetSitup > 9999) {
+      args.targetSquat < 1 || args.targetSquat > 9999 ||
+      args.targetSitup < 1 || args.targetSitup > 9999) {
       throw new Error("Targets must be between 1 and 9999");
     }
 

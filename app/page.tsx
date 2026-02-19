@@ -18,8 +18,8 @@ function hapticTick() {
   try {
     const tg = (window as any).Telegram?.WebApp;
     if (tg?.HapticFeedback) { tg.HapticFeedback.impactOccurred("light"); return; }
-  } catch {}
-  try { navigator.vibrate?.(6); } catch {}
+  } catch { }
+  try { navigator.vibrate?.(6); } catch { }
 }
 
 function DrumPicker({
@@ -48,7 +48,7 @@ function DrumPicker({
 
   useEffect(() => {
     scrollToValue(value, false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -129,51 +129,51 @@ const DEFAULT_TARGETS = { pushup: 50, squat: 50, situp: 50 };
 
 const HYPE_MESSAGES = {
   pushup: ["Pushup king!", "Chest day conquered!", "Arms of steel!"],
-  squat:  ["Leg day done!", "Squat god!", "Those quads though!"],
-  situp:  ["Core of iron!", "Six-pack loading!", "Abs are made today!"],
+  squat: ["Leg day done!", "Squat god!", "Those quads though!"],
+  situp: ["Core of iron!", "Six-pack loading!", "Abs are made today!"],
 };
 
 // Theme tokens
 const THEMES = {
   dark: {
-    bg:           "bg-[#0f0f0f]",
-    card:         "bg-[#1a1a1a]",
-    cardBg:       "#1a1a1a",
-    border:       "border-[#2a2a2a]",
-    borderHype:   { pushup: "border-blue-500", squat: "border-green-500", situp: "border-orange-500" },
-    divider:      "border-[#222]",
-    textPrimary:  "text-[#f0f0f0]",
-    textSecond:   "text-zinc-400",
-    textMuted:    "text-zinc-600",
-    textAccent:   { pushup: "text-blue-400", squat: "text-green-400", situp: "text-orange-400" },
-    inputBg:      "bg-[#111] border-[#333] text-[#f0f0f0]",
-    settingsBtn:  "hover:bg-[#222] active:scale-95",
-    saveBtn:      "bg-[#f0f0f0] text-[#0f0f0f]",
-    cancelBtn:    "border-[#333] text-zinc-300",
-    editBtn:      "text-zinc-500 hover:text-blue-400 hover:bg-blue-950",
-    deleteBtn:    "text-zinc-500 hover:text-red-400 hover:bg-red-950",
-    modalBg:      "bg-[#1a1a1a]",
-    progressTrack:"bg-[#2a2a2a]",
+    bg: "bg-[#0f0f0f]",
+    card: "bg-[#1a1a1a]",
+    cardBg: "#1a1a1a",
+    border: "border-[#2a2a2a]",
+    borderHype: { pushup: "border-blue-500", squat: "border-green-500", situp: "border-orange-500" },
+    divider: "border-[#222]",
+    textPrimary: "text-[#f0f0f0]",
+    textSecond: "text-zinc-400",
+    textMuted: "text-zinc-600",
+    textAccent: { pushup: "text-blue-400", squat: "text-green-400", situp: "text-orange-400" },
+    inputBg: "bg-[#111] border-[#333] text-[#f0f0f0]",
+    settingsBtn: "hover:bg-[#222] active:scale-95",
+    saveBtn: "bg-[#f0f0f0] text-[#0f0f0f]",
+    cancelBtn: "border-[#333] text-zinc-300",
+    editBtn: "text-zinc-500 hover:text-blue-400 hover:bg-blue-950",
+    deleteBtn: "text-zinc-500 hover:text-red-400 hover:bg-red-950",
+    modalBg: "bg-[#1a1a1a]",
+    progressTrack: "bg-[#2a2a2a]",
   },
   light: {
-    bg:           "bg-gray-50",
-    card:         "bg-white",
-    cardBg:       "#ffffff",
-    border:       "border-gray-100",
-    borderHype:   { pushup: "border-blue-400", squat: "border-green-400", situp: "border-orange-400" },
-    divider:      "border-gray-50",
-    textPrimary:  "text-gray-900",
-    textSecond:   "text-gray-500",
-    textMuted:    "text-gray-400",
-    textAccent:   { pushup: "text-blue-600", squat: "text-green-600", situp: "text-orange-500" },
-    inputBg:      "bg-white border-gray-300 text-gray-900",
-    settingsBtn:  "hover:bg-gray-200 active:scale-95",
-    saveBtn:      "bg-gray-800 text-white",
-    cancelBtn:    "border-gray-300 text-gray-700",
-    editBtn:      "text-gray-400 hover:text-blue-500 hover:bg-blue-50",
-    deleteBtn:    "text-gray-400 hover:text-red-500 hover:bg-red-50",
-    modalBg:      "bg-white",
-    progressTrack:"bg-gray-100",
+    bg: "bg-gray-50",
+    card: "bg-white",
+    cardBg: "#ffffff",
+    border: "border-gray-100",
+    borderHype: { pushup: "border-blue-400", squat: "border-green-400", situp: "border-orange-400" },
+    divider: "border-gray-50",
+    textPrimary: "text-gray-900",
+    textSecond: "text-gray-500",
+    textMuted: "text-gray-400",
+    textAccent: { pushup: "text-blue-600", squat: "text-green-600", situp: "text-orange-500" },
+    inputBg: "bg-white border-gray-300 text-gray-900",
+    settingsBtn: "hover:bg-gray-200 active:scale-95",
+    saveBtn: "bg-gray-800 text-white",
+    cancelBtn: "border-gray-300 text-gray-700",
+    editBtn: "text-gray-400 hover:text-blue-500 hover:bg-blue-50",
+    deleteBtn: "text-gray-400 hover:text-red-500 hover:bg-red-50",
+    modalBg: "bg-white",
+    progressTrack: "bg-gray-100",
   },
 } as const;
 
@@ -189,8 +189,8 @@ function LeaderboardSection({ leaderboard, t, exerciseConfig }: {
   const [activeTab, setActiveTab] = useState<"pushup" | "squat" | "situp">("pushup");
   const tabs: { key: "pushup" | "squat" | "situp"; label: string }[] = [
     { key: "pushup", label: "Pushups" },
-    { key: "squat",  label: "Squats"  },
-    { key: "situp",  label: "Situps"  },
+    { key: "squat", label: "Squats" },
+    { key: "situp", label: "Situps" },
   ];
 
   const sorted = leaderboard
@@ -211,11 +211,10 @@ function LeaderboardSection({ leaderboard, t, exerciseConfig }: {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 py-2 text-sm font-semibold transition ${
-                isActive
+              className={`flex-1 py-2 text-sm font-semibold transition ${isActive
                   ? `${tabCfg.color} text-white`
                   : `${t.card} ${t.textSecond}`
-              }`}
+                }`}
             >
               {tab.label}
             </button>
@@ -328,19 +327,22 @@ export default function Home() {
   const user = lp?.initData?.user;
   const telegramId = user?.id;
   const rawInitData = lp?.initDataRaw;
+  // chatId is present when the mini app is opened from a group chat button; undefined in DMs
+  const chatId: number | null = lp?.initData?.chat?.id ?? null;
 
   // 4. CONVEX HOOKS
-  const todayStats     = useQuery(api.workouts.getMyTodayStats, telegramId ? { telegramId } : "skip");
-  const globalStats    = useQuery(api.workouts.getGlobalStats);
+  const todayStats = useQuery(api.workouts.getMyTodayStats, telegramId ? { telegramId } : "skip");
+  const globalStats = useQuery(api.workouts.getGlobalStats);
   const recentWorkouts = useQuery(api.workouts.getRecentWorkouts, telegramId ? { telegramId } : "skip");
-  const myTargets      = useQuery(api.workouts.getMyTargets, telegramId ? { telegramId } : "skip");
-  const weeklyStats    = useQuery(api.workouts.getMyWeeklyStats, telegramId ? { telegramId } : "skip");
-  const leaderboard    = useQuery(api.workouts.getLeaderboard);
+  const myTargets = useQuery(api.workouts.getMyTargets, telegramId ? { telegramId } : "skip");
+  const weeklyStats = useQuery(api.workouts.getMyWeeklyStats, telegramId ? { telegramId } : "skip");
+  // Skip leaderboard query in solo (DM) mode — no chatId available
+  const leaderboard = useQuery(api.workouts.getLeaderboard, chatId ? { chatId } : "skip");
 
-  const logWorkoutMutation    = useMutation(api.workouts.logWorkout);
-  const setMyTargetsMutation  = useMutation(api.workouts.setMyTargets);
+  const logWorkoutMutation = useMutation(api.workouts.logWorkout);
+  const setMyTargetsMutation = useMutation(api.workouts.setMyTargets);
   const deleteWorkoutMutation = useMutation(api.workouts.deleteWorkout);
-  const editWorkoutMutation   = useMutation(api.workouts.editWorkout);
+  const editWorkoutMutation = useMutation(api.workouts.editWorkout);
   const [logging, setLogging] = useState<string | null>(null);
   const [sliderValues, setSliderValues] = useState({ pushup: 10, squat: 10, situp: 10 });
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -349,8 +351,8 @@ export default function Home() {
 
   const targets = {
     pushup: myTargets?.targetPushup ?? DEFAULT_TARGETS.pushup,
-    squat:  myTargets?.targetSquat  ?? DEFAULT_TARGETS.squat,
-    situp:  myTargets?.targetSitup  ?? DEFAULT_TARGETS.situp,
+    squat: myTargets?.targetSquat ?? DEFAULT_TARGETS.squat,
+    situp: myTargets?.targetSitup ?? DEFAULT_TARGETS.situp,
   };
 
   const handleSave = async () => {
@@ -358,7 +360,13 @@ export default function Home() {
     setLogging("saving");
     try {
       const entries = (["pushup", "squat", "situp"] as const).filter(t => sliderValues[t] > 0);
-      await Promise.all(entries.map(type => logWorkoutMutation({ initData: rawInitData, type, count: sliderValues[type] })));
+      await Promise.all(entries.map(type => logWorkoutMutation({
+        initData: rawInitData,
+        type,
+        count: sliderValues[type],
+        // Pass chatId to associate workout with the group; undefined = solo mode
+        ...(chatId !== null ? { chatId } : {}),
+      })));
       addLog(`Saved: ${entries.map(t => `${sliderValues[t]} ${t}s`).join(", ")}`);
     } catch (err: any) {
       addLog(`Save failed: ${err.message}`);
@@ -427,14 +435,14 @@ export default function Home() {
   }
 
   const pushups = todayStats?.pushup || 0;
-  const squats  = todayStats?.squat  || 0;
-  const situps  = todayStats?.situp  || 0;
+  const squats = todayStats?.squat || 0;
+  const situps = todayStats?.situp || 0;
   const totalCommunity = globalStats?.totalCount ? globalStats.totalCount.toLocaleString() : "...";
 
   const hype = {
     pushup: pushups >= targets.pushup,
-    squat:  squats  >= targets.squat,
-    situp:  situps  >= targets.situp,
+    squat: squats >= targets.squat,
+    situp: situps >= targets.situp,
   };
   const todayStr = new Date().toISOString().split("T")[0];
   const pickHype = (type: string) => {
@@ -443,14 +451,14 @@ export default function Home() {
   };
 
   const exerciseConfig = {
-    pushup: { label: "Pushups", color: "bg-blue-500",   accentHex: "#2563eb" },
-    squat:  { label: "Squats",  color: "bg-green-500",  accentHex: "#16a34a" },
-    situp:  { label: "Situps",  color: "bg-orange-500", accentHex: "#f97316" },
+    pushup: { label: "Pushups", color: "bg-blue-500", accentHex: "#2563eb" },
+    squat: { label: "Squats", color: "bg-green-500", accentHex: "#16a34a" },
+    situp: { label: "Situps", color: "bg-orange-500", accentHex: "#f97316" },
   };
   const statEntries: { type: keyof typeof exerciseConfig; count: number }[] = [
     { type: "pushup", count: pushups },
-    { type: "squat",  count: squats },
-    { type: "situp",  count: situps },
+    { type: "squat", count: squats },
+    { type: "situp", count: situps },
   ];
 
   return (
@@ -582,8 +590,14 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Leaderboard */}
-      <LeaderboardSection leaderboard={leaderboard} t={t} exerciseConfig={exerciseConfig} />
+      {/* Leaderboard — only shown in group mode; hidden in solo (DM) mode */}
+      {chatId ? (
+        <LeaderboardSection leaderboard={leaderboard} t={t} exerciseConfig={exerciseConfig} />
+      ) : (
+        <div className={`w-full max-w-md mb-8 text-center py-4 ${t.textMuted} text-sm`}>
+          🏋️ Open from a group chat to see the leaderboard
+        </div>
+      )}
 
       {/* Recent Logs */}
       <div className="w-full max-w-md mb-8">
@@ -636,8 +650,8 @@ export default function Home() {
                     >
                       {isDeleting ? (
                         <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                         </svg>
                       ) : (
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">

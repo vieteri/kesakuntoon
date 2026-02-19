@@ -25,6 +25,7 @@ http.route({
     if (!message) return new Response("OK", { status: 200 });
 
     const chatId = message.chat?.id;
+    const chatType: string = message.chat?.type || "private";
     const text: string = message.text || "";
     const cmd = text.split("@")[0].trim(); // strip bot username suffix
 
@@ -37,43 +38,51 @@ http.route({
     };
 
     if (cmd === "/leaderboard" || cmd === "/top") {
-      const board: any[] = await ctx.runQuery(api.workouts.getLeaderboard);
-      if (!board.length) {
-        await send("No workouts logged today yet. Be the first! 💪");
+      if (chatType === "private") {
+        await send("🏋️ Add me to a group chat and use <b>/leaderboard</b> there to see the group leaderboard!");
       } else {
-        const medals = ["🥇", "🥈", "🥉"];
-        const section = (title: string, key: "pushup" | "squat" | "situp") => {
-          const sorted = [...board].sort((a, b) => (b[key] ?? 0) - (a[key] ?? 0)).filter(u => u[key] > 0);
-          if (!sorted.length) return `${title}\n<i>No entries yet</i>`;
-          return title + "\n" + sorted.map((u, i) =>
-            `${medals[i] ?? `${i + 1}.`} <b>${escapeHtml(u.name)}</b> — ${u[key]} reps`
-          ).join("\n");
-        };
-        await send(
-          `🏆 <b>Today's Leaderboard</b>\n\n` +
-          section("💪 <b>Pushups</b>", "pushup") + "\n\n" +
-          section("🦵 <b>Squats</b>",  "squat")  + "\n\n" +
-          section("🔥 <b>Situps</b>",  "situp")
-        );
+        const board: any[] = await ctx.runQuery(api.workouts.getLeaderboard, { chatId });
+        if (!board.length) {
+          await send("No workouts logged today yet. Be the first! 💪");
+        } else {
+          const medals = ["🥇", "🥈", "🥉"];
+          const section = (title: string, key: "pushup" | "squat" | "situp") => {
+            const sorted = [...board].sort((a, b) => (b[key] ?? 0) - (a[key] ?? 0)).filter(u => u[key] > 0);
+            if (!sorted.length) return `${title}\n<i>No entries yet</i>`;
+            return title + "\n" + sorted.map((u, i) =>
+              `${medals[i] ?? `${i + 1}.`} <b>${escapeHtml(u.name)}</b> — ${u[key]} reps`
+            ).join("\n");
+          };
+          await send(
+            `🏆 <b>Today's Leaderboard</b>\n\n` +
+            section("💪 <b>Pushups</b>", "pushup") + "\n\n" +
+            section("🦵 <b>Squats</b>", "squat") + "\n\n" +
+            section("🔥 <b>Situps</b>", "situp")
+          );
+        }
       }
     } else if (cmd === "/goals" || cmd === "/progress") {
-      const progress: any[] = await ctx.runQuery(api.workouts.getGoalsProgress);
-      if (!progress.length) {
-        await send("No workouts logged today yet. Start now! 🏃");
+      if (chatType === "private") {
+        await send("📊 Add me to a group chat and use <b>/goals</b> there to see everyone's progress!");
       } else {
-        const lines = progress.map((u) => {
-          const pct = (done: number, target: number) =>
-            Math.min(100, target > 0 ? Math.round((done / target) * 100) : 100);
-          const line = (emoji: string, label: string, done: number, target: number) =>
-            `${emoji} ${label}: ${done}/${target} ${progressBar(pct(done, target))}`;
-          return (
-            `<b>${escapeHtml(u.name)}</b>\n` +
-            line("💪", "Pushups", u.pushup, u.targetPushup) + "\n" +
-            line("🦵", "Squats",  u.squat,  u.targetSquat)  + "\n" +
-            line("🔥", "Situps",  u.situp,  u.targetSitup)
-          );
-        });
-        await send(`📊 <b>Today's Goals</b>\n\n${lines.join("\n\n")}`);
+        const progress: any[] = await ctx.runQuery(api.workouts.getGoalsProgress, { chatId });
+        if (!progress.length) {
+          await send("No workouts logged today yet. Start now! 🏃");
+        } else {
+          const lines = progress.map((u) => {
+            const pct = (done: number, target: number) =>
+              Math.min(100, target > 0 ? Math.round((done / target) * 100) : 100);
+            const line = (emoji: string, label: string, done: number, target: number) =>
+              `${emoji} ${label}: ${done}/${target} ${progressBar(pct(done, target))}`;
+            return (
+              `<b>${escapeHtml(u.name)}</b>\n` +
+              line("💪", "Pushups", u.pushup, u.targetPushup) + "\n" +
+              line("🦵", "Squats", u.squat, u.targetSquat) + "\n" +
+              line("🔥", "Situps", u.situp, u.targetSitup)
+            );
+          });
+          await send(`📊 <b>Today's Goals</b>\n\n${lines.join("\n\n")}`);
+        }
       }
     } else if (cmd === "/stats" || cmd === "/week") {
       // Community weekly totals
