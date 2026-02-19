@@ -286,8 +286,13 @@ export default function Home() {
 
     const logWorkoutMutation = useMutation(api.workouts.logWorkout);
     const setMyTargetsMutation = useMutation(api.workouts.setMyTargets);
+    const deleteWorkoutMutation = useMutation(api.workouts.deleteWorkout);
+    const editWorkoutMutation = useMutation(api.workouts.editWorkout);
     const [logging, setLogging] = useState<string | null>(null);
     const [sliderValues, setSliderValues] = useState({ pushup: 10, squat: 10, situp: 10 });
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [editingLog, setEditingLog] = useState<{ id: string; type: string; count: number } | null>(null);
+    const [editCount, setEditCount] = useState("");
 
     // Resolved targets (fall back to defaults if not set)
     const targets = {
@@ -506,16 +511,117 @@ export default function Home() {
       <div className="w-full max-w-md mb-8">
         <h2 className="text-lg font-semibold text-gray-700 mb-3">Recent Logs</h2>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            {!recentWorkouts ? <div className="p-4 text-center text-gray-400">Loading...</div> :
-             recentWorkouts.length === 0 ? <div className="p-4 text-center text-gray-400">No logs yet.</div> :
-             recentWorkouts.map((w: any) => (
-                <div key={w._id} className="p-4 border-b border-gray-50 flex justify-between">
-                    <span className="font-medium capitalize">{w.count} {w.type}s</span>
-                    <span className="text-gray-400 text-sm">{new Date(w.timestamp).toLocaleTimeString()}</span>
+          {!recentWorkouts ? (
+            <div className="p-4 text-center text-gray-400">Loading...</div>
+          ) : recentWorkouts.length === 0 ? (
+            <div className="p-4 text-center text-gray-400">No logs yet.</div>
+          ) : recentWorkouts.map((w: any) => {
+            const cfg = exerciseConfig[w.type as keyof typeof exerciseConfig];
+            const isDeleting = deletingId === w._id;
+            return (
+              <div key={w._id} className="border-b border-gray-50 last:border-0">
+                <div className="px-4 py-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full ${cfg?.color ?? "bg-gray-400"} text-white shrink-0`}>
+                      {w.type}
+                    </span>
+                    <span className="font-semibold text-gray-800">{w.count}</span>
+                    <span className="text-gray-400 text-xs">{new Date(w.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => { setEditingLog({ id: w._id, type: w.type, count: w.count }); setEditCount(String(w.count)); }}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 active:scale-90 transition"
+                      aria-label="Edit"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.536-6.536a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H8v-2.414a2 2 0 01.586-1.414z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!rawInitData) return;
+                        setDeletingId(w._id);
+                        try {
+                          await deleteWorkoutMutation({ initData: rawInitData, workoutId: w._id });
+                        } catch (err: any) {
+                          addLog(`Delete failed: ${err.message}`);
+                        } finally {
+                          setDeletingId(null);
+                        }
+                      }}
+                      disabled={isDeleting}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 active:scale-90 transition disabled:opacity-40"
+                      aria-label="Delete"
+                    >
+                      {isDeleting ? (
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6m-7 0a1 1 0 01-1-1V5a1 1 0 011-1h6a1 1 0 011 1v1a1 1 0 01-1 1H9z" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 </div>
-             ))}
+              </div>
+            );
+          })}
         </div>
       </div>
+
+      {/* Edit Log Modal */}
+      {editingLog && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6"
+          onClick={(e) => { if (e.target === e.currentTarget) setEditingLog(null); }}
+        >
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-1 capitalize">Edit {editingLog.type}s</h2>
+            <p className="text-sm text-gray-500 mb-5">Change the rep count for this entry</p>
+            <input
+              type="number"
+              min={1}
+              max={9999}
+              value={editCount}
+              onChange={(e) => setEditCount(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-center text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-400 mb-6"
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => setEditingLog(null)}
+                className="flex-1 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!rawInitData || !editingLog) return;
+                  const n = Number(editCount);
+                  if (!Number.isInteger(n) || n < 1 || n > 9999) {
+                    alert("Enter a number between 1 and 9999");
+                    return;
+                  }
+                  try {
+                    await editWorkoutMutation({ initData: rawInitData, workoutId: editingLog.id as any, count: n });
+                    setEditingLog(null);
+                  } catch (err: any) {
+                    addLog(`Edit failed: ${err.message}`);
+                    alert("Failed to update. See debug info.");
+                  }
+                }}
+                className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-semibold active:scale-95 transition"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* DEBUG TOGGLE */}
       <details className="w-full max-w-md">

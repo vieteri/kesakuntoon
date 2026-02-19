@@ -249,6 +249,67 @@ export const setMyTargets = mutation({
   },
 });
 
+// Delete a workout (must belong to the authenticated user)
+export const deleteWorkout = mutation({
+  args: {
+    initData: v.string(),
+    workoutId: v.id("workouts"),
+  },
+  handler: async (ctx: any, args: any) => {
+    const botToken = process.env.BOT_TOKEN;
+    if (!botToken) throw new Error("Server configuration error: BOT_TOKEN missing");
+
+    const userData = await validateTelegramWebAppData(args.initData, botToken);
+    if (!userData?.user) throw new Error("Invalid or expired Telegram data");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_telegramId", (q: any) => q.eq("telegramId", userData.user.id))
+      .first();
+    if (!user) throw new Error("User not found");
+
+    const workout = await ctx.db.get(args.workoutId);
+    if (!workout) throw new Error("Workout not found");
+    if (workout.userId.toString() !== user._id.toString()) throw new Error("Not authorized");
+
+    await ctx.db.delete(args.workoutId);
+    return { success: true };
+  },
+});
+
+// Edit a workout's count (must belong to the authenticated user)
+export const editWorkout = mutation({
+  args: {
+    initData: v.string(),
+    workoutId: v.id("workouts"),
+    count: v.number(),
+  },
+  handler: async (ctx: any, args: any) => {
+    const botToken = process.env.BOT_TOKEN;
+    if (!botToken) throw new Error("Server configuration error: BOT_TOKEN missing");
+
+    const userData = await validateTelegramWebAppData(args.initData, botToken);
+    if (!userData?.user) throw new Error("Invalid or expired Telegram data");
+
+    if (!Number.isInteger(args.count) || args.count < 0 || args.count > 9999) {
+      throw new Error("Count must be a whole number between 0 and 9999");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_telegramId", (q: any) => q.eq("telegramId", userData.user.id))
+      .first();
+    if (!user) throw new Error("User not found");
+
+    const workout = await ctx.db.get(args.workoutId);
+    if (!workout) throw new Error("Workout not found");
+    if (workout.userId.toString() !== user._id.toString()) throw new Error("Not authorized");
+
+    await ctx.db.patch(args.workoutId, { count: args.count });
+    return { success: true };
+  },
+});
+
 // Get global community stats
 export const getGlobalStats = query({
   args: {},
