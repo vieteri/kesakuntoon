@@ -40,6 +40,25 @@ export const getMyGroups = query({
   },
 });
 
+// Return all members of a group with their telegramId and firstName (for streak leaderboard)
+export const getGroupMembers = query({
+  args: { chatId: v.number() },
+  handler: async (ctx: any, args: any) => {
+    const members = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_chat", (q: any) => q.eq("chatId", args.chatId))
+      .collect();
+
+    const result = [];
+    for (const m of members) {
+      const user = await ctx.db.get(m.userId);
+      if (!user) continue;
+      result.push({ telegramId: user.telegramId, firstName: user.firstName });
+    }
+    return result;
+  },
+});
+
 // Auto-link a user to a group when they send any message in the group.
 // Does nothing if the user is not a known app user.
 export const autoLinkUser = mutation({

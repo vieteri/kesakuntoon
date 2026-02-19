@@ -475,6 +475,54 @@ export const editWorkout = mutation({
   },
 });
 
+// Compute streak: consecutive completed days (all 3 targets hit) ending today
+export const getMyStreak = query({
+  args: { telegramId: v.number() },
+  handler: async (ctx: any, args: any) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_telegramId", (q: any) => q.eq("telegramId", args.telegramId))
+      .first();
+
+    if (!user) return { streak: 0, completedToday: false };
+
+    const targetPushup = user.targetPushup ?? 50;
+    const targetSquat = user.targetSquat ?? 50;
+    const targetSitup = user.targetSitup ?? 50;
+
+    let streak = 0;
+    let completedToday = false;
+
+    for (let i = 0; i < 365; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const date = d.toISOString().split("T")[0];
+
+      const workouts = await ctx.db
+        .query("workouts")
+        .withIndex("by_user_date", (q: any) => q.eq("userId", user._id).eq("date", date))
+        .collect();
+
+      const totals = workouts.reduce(
+        (acc: any, w: any) => { acc[w.type] = (acc[w.type] || 0) + w.count; return acc; },
+        { pushup: 0, squat: 0, situp: 0 }
+      );
+
+      const dayDone =
+        totals.pushup >= targetPushup &&
+        totals.squat >= targetSquat &&
+        totals.situp >= targetSitup;
+
+      if (!dayDone) break;
+
+      streak++;
+      if (i === 0) completedToday = true;
+    }
+
+    return { streak, completedToday };
+  },
+});
+
 // Get global community stats
 export const getGlobalStats = query({
   args: {},

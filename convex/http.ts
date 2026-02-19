@@ -137,7 +137,28 @@ http.route({
         `📈 <b>Community Stats</b>\n\nTotal reps logged: <b>${globalStats?.totalCount?.toLocaleString() ?? 0}</b>\n\nTip: Log your reps in the Kesakuntoon mini app! 💪`
       );
     } else if (cmd === "/streaks") {
-      await send("🔥 Streak tracking coming soon! Keep logging daily to build your streak.");
+      if (chatType === "private") {
+        await send("🔥 Add me to a group chat and use <b>/streaks</b> there to see everyone's streaks!");
+      } else {
+        const members: any[] = await ctx.runQuery(api.groups.getGroupMembers, { chatId });
+        if (!members.length) {
+          await send("No members found. Use /scan to add group members first.");
+        } else {
+          // Compute streak for each member
+          const streakResults: { name: string; streak: number }[] = [];
+          for (const member of members) {
+            const result: any = await ctx.runQuery(api.workouts.getMyStreak, { telegramId: member.telegramId });
+            streakResults.push({ name: member.firstName, streak: result?.streak ?? 0 });
+          }
+          streakResults.sort((a, b) => b.streak - a.streak);
+          const medals = ["🥇", "🥈", "🥉"];
+          const lines = streakResults.map((u, i) => {
+            const fire = u.streak > 0 ? " 🔥" : "";
+            return `${medals[i] ?? `${i + 1}.`} <b>${escapeHtml(u.name)}</b> — ${u.streak} day${u.streak !== 1 ? "s" : ""}${fire}`;
+          });
+          await send(`🔥 <b>Streak Leaderboard</b>\n\n${lines.join("\n")}`);
+        }
+      }
     } else if (cmd === "/scan") {
       if (chatType === "private") {
         await send("⚠️ Use /scan in a group chat to scan members into the leaderboard.");

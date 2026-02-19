@@ -345,6 +345,7 @@ export default function Home() {
   const effectiveChatId = chatId ?? selectedChatId;
   // Skip leaderboard query in solo (DM) mode — no chatId available
   const leaderboard = useQuery(api.workouts.getLeaderboard, effectiveChatId ? { chatId: effectiveChatId } : "skip");
+  const myStreak = useQuery(api.workouts.getMyStreak, telegramId ? { telegramId } : "skip");
 
   const logWorkoutMutation = useMutation(api.workouts.logWorkout);
   const setMyTargetsMutation = useMutation(api.workouts.setMyTargets);
@@ -525,6 +526,28 @@ export default function Home() {
           );
         })}
       </div>
+
+      {/* Streak Badge */}
+      {myStreak !== undefined && (
+        <div className="w-full max-w-md mb-6 flex justify-center">
+          <div
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full font-semibold text-sm border transition-all ${
+              myStreak.completedToday
+                ? "bg-orange-500/20 border-orange-500 text-orange-400"
+                : myStreak.streak > 0
+                ? "bg-orange-500/10 border-orange-500/40 text-orange-400/80"
+                : `${t.card} ${t.border} ${t.textMuted}`
+            }`}
+          >
+            <span>🔥</span>
+            <span>
+              {myStreak.streak > 0
+                ? `${myStreak.streak} day streak`
+                : "Start your streak!"}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Group Selector — shown when opened outside a group but user has groups */}
       {chatId === null && myGroups && myGroups.length > 0 && (
