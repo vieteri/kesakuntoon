@@ -172,6 +172,83 @@ export const getRecentWorkouts = query({
   },
 });
 
+// Get targets for a user
+export const getMyTargets = query({
+  args: {
+    telegramId: v.number(),
+  },
+  handler: async (ctx: any, args: any) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_telegramId", (q: any) => q.eq("telegramId", args.telegramId))
+      .first();
+
+    if (!user) {
+      return { targetPushup: null, targetSquat: null, targetSitup: null };
+    }
+
+    return {
+      targetPushup: user.targetPushup ?? null,
+      targetSquat: user.targetSquat ?? null,
+      targetSitup: user.targetSitup ?? null,
+    };
+  },
+});
+
+// Set targets for a user
+export const setMyTargets = mutation({
+  args: {
+    initData: v.string(),
+    targetPushup: v.number(),
+    targetSquat: v.number(),
+    targetSitup: v.number(),
+  },
+  handler: async (ctx: any, args: any) => {
+    const botToken = process.env.BOT_TOKEN;
+    if (!botToken) {
+      throw new Error("Server configuration error: BOT_TOKEN missing");
+    }
+
+    const userData = await validateTelegramWebAppData(args.initData, botToken);
+    if (!userData || !userData.user) {
+      throw new Error("Invalid or expired Telegram data");
+    }
+
+    const telegramId = userData.user.id;
+
+    if (args.targetPushup < 1 || args.targetPushup > 9999 ||
+        args.targetSquat < 1 || args.targetSquat > 9999 ||
+        args.targetSitup < 1 || args.targetSitup > 9999) {
+      throw new Error("Targets must be between 1 and 9999");
+    }
+
+    const existingUser = await ctx.db
+      .query("users")
+      .withIndex("by_telegramId", (q: any) => q.eq("telegramId", telegramId))
+      .first();
+
+    if (existingUser) {
+      await ctx.db.patch(existingUser._id, {
+        targetPushup: args.targetPushup,
+        targetSquat: args.targetSquat,
+        targetSitup: args.targetSitup,
+      });
+    } else {
+      await ctx.db.insert("users", {
+        telegramId,
+        firstName: userData.user.first_name,
+        username: userData.user.username,
+        joinedAt: Date.now(),
+        targetPushup: args.targetPushup,
+        targetSquat: args.targetSquat,
+        targetSitup: args.targetSitup,
+      });
+    }
+
+    return { success: true };
+  },
+});
+
 // Get global community stats
 export const getGlobalStats = query({
   args: {},

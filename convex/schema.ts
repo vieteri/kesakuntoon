@@ -8,6 +8,9 @@ export default defineSchema({
     firstName: v.string(),
     username: v.optional(v.string()),
     joinedAt: v.number(), // Timestamp
+    targetPushup: v.optional(v.number()),
+    targetSquat: v.optional(v.number()),
+    targetSitup: v.optional(v.number()),
   }).index("by_telegramId", ["telegramId"]),
 
   // Treenisuoritukset

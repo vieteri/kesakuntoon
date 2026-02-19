@@ -1,10 +1,24 @@
 // convex/auth.ts
-import { GenericActionCtx } from "convex/server";
 
 export async function validateTelegramWebAppData(
-  initData: string, 
+  initData: string,
   botToken: string
 ): Promise<any | null> {
+  // ⚠️  DEV BYPASS — REMOVE DEV_MODE from Convex env vars before shipping to production!
+  // Set DEV_MODE=true in Convex dashboard → Settings → Environment Variables for local testing.
+  if (process.env.DEV_MODE === "true") {
+    const params = new URLSearchParams(initData);
+    const userStr = params.get("user");
+    if (!userStr) return null;
+    try {
+      const user = JSON.parse(userStr);
+      if (!user?.id) return null;
+      return { user, auth_date: params.get("auth_date") ?? "" };
+    } catch {
+      return null;
+    }
+  }
+
   // 1. Parse query string
   const params = new URLSearchParams(initData);
   const data: Record<string, string> = {};

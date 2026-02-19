@@ -6,6 +6,14 @@ import { useState, useEffect } from "react";
 // Remove static import of Telegram SDK
 // import { retrieveLaunchParams } from "@telegram-apps/sdk-react";
 
+const DEFAULT_TARGETS = { pushup: 50, squat: 50, situp: 50 };
+
+const HYPE_MESSAGES = {
+  pushup: ["Pushup king!", "Chest day conquered!", "Arms of steel!"],
+  squat:  ["Leg day done!", "Squat god!", "Those quads though!"],
+  situp:  ["Core of iron!", "Six-pack loading!", "Abs are made today!"],
+};
+
 // Simple Error Boundary Component
 function ErrorFallback({ error }: { error: any }) {
   return (
@@ -14,7 +22,7 @@ function ErrorFallback({ error }: { error: any }) {
       <pre className="text-xs bg-red-100 p-2 rounded overflow-auto max-w-full">
         {error?.message || JSON.stringify(error)}
       </pre>
-      <button 
+      <button
         onClick={() => window.location.reload()}
         className="mt-4 px-4 py-2 bg-red-600 text-white rounded"
       >
@@ -30,6 +38,9 @@ export default function Home() {
   const [error, setError] = useState<any>(null);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [lp, setLp] = useState<any>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [draftTargets, setDraftTargets] = useState({ pushup: "", squat: "", situp: "" });
+  const [savingTargets, setSavingTargets] = useState(false);
 
   // Helper to add logs
   const addLog = (msg: string) => setDebugLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
@@ -55,9 +66,9 @@ export default function Home() {
                     await new Promise(resolve => setTimeout(resolve, 100));
                     attempts++;
                 }
-                
+
                 const tgWebApp = (window as any).Telegram?.WebApp;
-                
+
                 if (!tgWebApp) {
                     addLog("Not in Telegram (window.Telegram.WebApp missing after waiting)");
                     return;
@@ -66,7 +77,7 @@ export default function Home() {
                 addLog("Telegram WebApp detected!");
                 addLog(`Platform: ${tgWebApp.platform}`);
                 addLog(`Version: ${tgWebApp.version}`);
-                
+
                 // Initialize the WebApp
                 tgWebApp.ready();
                 addLog("WebApp.ready() called");
@@ -74,10 +85,10 @@ export default function Home() {
                 // Get user data from init data
                 const initData = tgWebApp.initData;
                 const initDataUnsafe = tgWebApp.initDataUnsafe;
-                
+
                 addLog(`Init data exists: ${!!initData}`);
                 addLog(`User: ${JSON.stringify(initDataUnsafe?.user)}`);
-                
+
                 if (initDataUnsafe?.user) {
                     setLp({
                         initData: initDataUnsafe,
@@ -102,38 +113,82 @@ export default function Home() {
     const user = lp?.initData?.user;
     const telegramId = user?.id;
     const rawInitData = lp?.initDataRaw;
-  
+
     // 4. CONVEX HOOKS (Only run if we have an ID to avoid unnecessary queries)
     // We use "skip" if no ID, so these shouldn't crash
     const todayStats = useQuery(api.workouts.getMyTodayStats, telegramId ? { telegramId } : "skip");
     const globalStats = useQuery(api.workouts.getGlobalStats);
     const recentWorkouts = useQuery(api.workouts.getRecentWorkouts, telegramId ? { telegramId } : "skip");
-    
+    const myTargets = useQuery(api.workouts.getMyTargets, telegramId ? { telegramId } : "skip");
+
     const logWorkoutMutation = useMutation(api.workouts.logWorkout);
+    const setMyTargetsMutation = useMutation(api.workouts.setMyTargets);
     const [logging, setLogging] = useState<string | null>(null);
-  
-    const handleLog = async (type: string, count: number) => {
+    const [sliderValues, setSliderValues] = useState({ pushup: 10, squat: 10, situp: 10 });
+
+    // Resolved targets (fall back to defaults if not set)
+    const targets = {
+      pushup: myTargets?.targetPushup ?? DEFAULT_TARGETS.pushup,
+      squat:  myTargets?.targetSquat  ?? DEFAULT_TARGETS.squat,
+      situp:  myTargets?.targetSitup  ?? DEFAULT_TARGETS.situp,
+    };
+
+    const handleSave = async () => {
       if (!telegramId || !rawInitData) {
-          alert("Cannot log: Missing Telegram data");
-          return;
+        alert("Cannot log: Missing Telegram data");
+        return;
       }
-  
-      setLogging(type);
+      setLogging("saving");
       try {
-          await logWorkoutMutation({ initData: rawInitData, type, count });
-          addLog(`Logged ${count} ${type}s`);
+        const entries = (["pushup", "squat", "situp"] as const).filter(t => sliderValues[t] > 0);
+        await Promise.all(entries.map(type =>
+          logWorkoutMutation({ initData: rawInitData, type, count: sliderValues[type] })
+        ));
+        addLog(`Saved: ${entries.map(t => `${sliderValues[t]} ${t}s`).join(", ")}`);
       } catch (err: any) {
-          addLog(`Log failed: ${err.message}`);
-          alert("Failed to log. See debug info.");
+        addLog(`Save failed: ${err.message}`);
+        alert("Failed to save. See debug info.");
       } finally {
-          setLogging(null);
+        setLogging(null);
+      }
+    };
+
+    const openSettings = () => {
+      setDraftTargets({
+        pushup: String(targets.pushup),
+        squat:  String(targets.squat),
+        situp:  String(targets.situp),
+      });
+      setShowSettings(true);
+    };
+
+    const handleSaveTargets = async () => {
+      if (!rawInitData) {
+        alert("Cannot save: Missing Telegram data");
+        return;
+      }
+      const p = Number(draftTargets.pushup);
+      const sq = Number(draftTargets.squat);
+      const si = Number(draftTargets.situp);
+      if ([p, sq, si].some(n => !Number.isInteger(n) || n < 1 || n > 9999)) {
+        alert("Each target must be a whole number between 1 and 9999");
+        return;
+      }
+      setSavingTargets(true);
+      try {
+        await setMyTargetsMutation({ initData: rawInitData, targetPushup: p, targetSquat: sq, targetSitup: si });
+        setShowSettings(false);
+      } catch (err: any) {
+        alert(`Failed to save: ${err.message}`);
+      } finally {
+        setSavingTargets(false);
       }
     };
 
     // 5. RENDER
     // Only access properties if we have data to prevent crashes
     if (error) return <ErrorFallback error={error} />;
-  
+
     // Prevent hydration mismatch by showing simple loading state until client mount
     if (!isMounted) return (
         <div className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-50">
@@ -141,7 +196,7 @@ export default function Home() {
             <p className="text-gray-400 text-sm">Loading Kesakuntoon...</p>
         </div>
     );
-  
+
     // Render the debug UI if something is wrong or just for visibility
     const DebugUI = () => (
       <div className="mt-8 p-4 bg-gray-900 text-green-400 font-mono text-xs rounded w-full max-w-md overflow-hidden">
@@ -155,7 +210,7 @@ export default function Home() {
           </div>
       </div>
     );
-  
+
     // If we are not in Telegram (no user ID), show a friendly message + Debug
     if (!telegramId) {
         return (
@@ -172,58 +227,127 @@ export default function Home() {
     const squats = todayStats?.squat || 0;
     const situps = todayStats?.situp || 0;
     const totalCommunity = globalStats?.totalCount ? globalStats.totalCount.toLocaleString() : "...";
-  
+
+    // Hype logic
+    const hype = {
+      pushup: pushups >= targets.pushup,
+      squat:  squats  >= targets.squat,
+      situp:  situps  >= targets.situp,
+    };
+    const todayStr = new Date().toISOString().split("T")[0];
+    const pickHype = (type: string) => {
+      const msgs = HYPE_MESSAGES[type as keyof typeof HYPE_MESSAGES];
+      const idx = todayStr.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % msgs.length;
+      return msgs[idx];
+    };
+
+    // Per-exercise styles
+    const exerciseConfig = {
+      pushup: { label: "Pushups", color: "bg-blue-500",  border: "border-blue-400",  text: "text-blue-600" },
+      squat:  { label: "Squats",  color: "bg-green-500", border: "border-green-400", text: "text-green-600" },
+      situp:  { label: "Situps",  color: "bg-orange-500",border: "border-orange-400",text: "text-orange-500" },
+    };
+    const statEntries: { type: keyof typeof exerciseConfig; count: number }[] = [
+      { type: "pushup", count: pushups },
+      { type: "squat",  count: squats },
+      { type: "situp",  count: situps },
+    ];
+
     // Main Dashboard
     return (
       <main className="flex min-h-screen flex-col items-center p-6 bg-gray-50 text-gray-900 font-sans">
         <header className="w-full max-w-md mb-8 flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">Hi, {user?.firstName}!</h1>
+            <h1 className="text-2xl font-bold text-gray-800">Hi, {user?.first_name}!</h1>
             <p className="text-sm text-gray-500">Today's Progress</p>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Community Total</p>
-            <p className="text-xl font-bold text-blue-600">
-              {totalCommunity}
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Community Total</p>
+              <p className="text-xl font-bold text-blue-600">
+                {totalCommunity}
+              </p>
+            </div>
+            <button
+              onClick={openSettings}
+              className="text-xl p-1 rounded-lg hover:bg-gray-200 active:scale-95 transition"
+              aria-label="Settings"
+            >
+              ⚙️
+            </button>
           </div>
         </header>
-  
+
         {/* Stats Grid */}
         <div className="w-full max-w-md grid grid-cols-3 gap-3 mb-8">
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center">
-            <span className="text-xs text-gray-400 font-medium uppercase mb-1">Pushups</span>
-            <span className="text-3xl font-bold text-gray-800">{pushups}</span>
-          </div>
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center">
-            <span className="text-xs text-gray-400 font-medium uppercase mb-1">Squats</span>
-            <span className="text-3xl font-bold text-gray-800">{squats}</span>
-          </div>
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center">
-            <span className="text-xs text-gray-400 font-medium uppercase mb-1">Situps</span>
-            <span className="text-3xl font-bold text-gray-800">{situps}</span>
-          </div>
+          {statEntries.map(({ type, count }) => {
+            const cfg = exerciseConfig[type];
+            const target = targets[type];
+            const pct = Math.min(100, target > 0 ? Math.round((count / target) * 100) : 100);
+            const isHype = hype[type];
+            return (
+              <div
+                key={type}
+                className={`bg-white p-4 rounded-xl shadow-sm border-2 flex flex-col items-center ${isHype ? cfg.border : "border-gray-100"}`}
+              >
+                <span className="text-xs text-gray-400 font-medium uppercase mb-1">{cfg.label}</span>
+                <span className={`text-3xl font-bold ${isHype ? cfg.text : "text-gray-800"}`}>{count}</span>
+                <span className="text-xs text-gray-400 mt-0.5">/ {target}</span>
+                {/* Progress bar */}
+                <div className="w-full bg-gray-100 rounded-full h-1.5 mt-2">
+                  <div
+                    className={`${cfg.color} h-1.5 rounded-full transition-all`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                {isHype && (
+                  <span className={`text-xs font-semibold mt-2 ${cfg.text} text-center leading-tight`}>
+                    {pickHype(type)}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
 
 
-      {/* Actions */}
-      <div className="w-full max-w-md space-y-3 mb-8">
-         <button onClick={() => handleLog("pushup", 10)} disabled={!!logging} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow-sm active:scale-95 transition">
-            {logging === "pushup" ? "Saving..." : "+10 Pushups"}
-         </button>
-         <button onClick={() => handleLog("squat", 10)} disabled={!!logging} className="w-full py-3 bg-green-600 text-white rounded-xl font-bold shadow-sm active:scale-95 transition">
-            {logging === "squat" ? "Saving..." : "+10 Squats"}
-         </button>
-         <button onClick={() => handleLog("situp", 10)} disabled={!!logging} className="w-full py-3 bg-orange-500 text-white rounded-xl font-bold shadow-sm active:scale-95 transition">
-            {logging === "situp" ? "Saving..." : "+10 Situps"}
-         </button>
+      {/* Actions — Sliders */}
+      <div className="w-full max-w-md bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-8 space-y-5">
+        {(["pushup", "squat", "situp"] as const).map((type) => {
+          const cfg = exerciseConfig[type];
+          return (
+            <div key={type}>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-sm font-medium text-gray-700">{cfg.label}</span>
+                <span className={`text-sm font-bold ${cfg.text}`}>{sliderValues[type]}</span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={200}
+                value={sliderValues[type]}
+                onChange={(e) => setSliderValues(prev => ({ ...prev, [type]: Number(e.target.value) }))}
+                disabled={!!logging}
+                className="w-full accent-current"
+                style={{ accentColor: type === "pushup" ? "#2563eb" : type === "squat" ? "#16a34a" : "#f97316" }}
+              />
+            </div>
+          );
+        })}
+        <button
+          onClick={handleSave}
+          disabled={!!logging}
+          className="w-full py-3 bg-gray-800 text-white rounded-xl font-bold shadow-sm active:scale-95 transition disabled:opacity-60"
+        >
+          {logging === "saving" ? "Saving..." : "Save All"}
+        </button>
       </div>
 
       {/* Recent Activity */}
       <div className="w-full max-w-md mb-8">
         <h2 className="text-lg font-semibold text-gray-700 mb-3">Recent Logs</h2>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            {!recentWorkouts ? <div className="p-4 text-center text-gray-400">Loading...</div> : 
+            {!recentWorkouts ? <div className="p-4 text-center text-gray-400">Loading...</div> :
              recentWorkouts.length === 0 ? <div className="p-4 text-center text-gray-400">No logs yet.</div> :
              recentWorkouts.map((w: any) => (
                 <div key={w._id} className="p-4 border-b border-gray-50 flex justify-between">
@@ -239,6 +363,52 @@ export default function Home() {
         <summary className="text-xs text-gray-400 cursor-pointer text-center">Show Debug Info</summary>
         <DebugUI />
       </details>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowSettings(false); }}
+        >
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-1">Daily Targets</h2>
+            <p className="text-sm text-gray-500 mb-5">Set your daily rep goals</p>
+
+            {(["pushup", "squat", "situp"] as const).map((type) => {
+              const cfg = exerciseConfig[type];
+              return (
+                <div key={type} className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{cfg.label}</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={9999}
+                    value={draftTargets[type]}
+                    onChange={(e) => setDraftTargets(prev => ({ ...prev, [type]: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                </div>
+              );
+            })}
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowSettings(false)}
+                className="flex-1 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveTargets}
+                disabled={savingTargets}
+                className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-semibold active:scale-95 transition disabled:opacity-60"
+              >
+                {savingTargets ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
