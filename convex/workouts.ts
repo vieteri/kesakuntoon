@@ -1,4 +1,5 @@
-import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { internalAction, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { validateTelegramWebAppData } from "./auth";
 
@@ -7,6 +8,31 @@ function escapeHtml(s: string) {
 }
 
 const VALID_WORKOUT_TYPES = ["pushup", "squat", "situp"];
+type WorkoutType = (typeof VALID_WORKOUT_TYPES)[number];
+
+// Send Telegram group announcement as an action (fetch is not allowed in mutations).
+export const sendGroupAnnouncement = internalAction({
+  args: {
+    chatId: v.number(),
+    text: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const botToken = process.env.BOT_TOKEN;
+    if (!botToken) return { ok: false };
+
+    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: args.chatId,
+        text: args.text,
+        parse_mode: "HTML",
+      }),
+    });
+
+    return { ok: true };
+  },
+});
 
 // Log a new workout (and create user if not exists)
 export const logWorkout = mutation({
@@ -98,25 +124,131 @@ export const logWorkout = mutation({
       ...(args.chatId !== undefined ? { chatId: args.chatId } : {}),
     });
 
-    // 5. Announce to group if chatId provided
+    // 5. Announce to group if chatId provided (scheduled action).
     if (args.chatId !== undefined) {
       const typeEmoji: Record<string, string> = { pushup: "💪", squat: "🦵", situp: "🔥" };
       const typeLabel: Record<string, string> = { pushup: "pushups", squat: "squats", situp: "situps" };
       const emoji = typeEmoji[args.type] ?? "🏋️";
       const label = typeLabel[args.type] ?? args.type;
       const name = username ? `@${username}` : firstName;
-      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: args.chatId,
-          text: `${emoji} <b>${escapeHtml(name)}</b> just did <b>${args.count} ${label}</b>!`,
-          parse_mode: "HTML",
-        }),
+      await ctx.scheduler.runAfter(0, internal.workouts.sendGroupAnnouncement, {
+        chatId: args.chatId,
+        text: `${emoji} <b>${escapeHtml(name)}</b> just did <b>${args.count} ${label}</b>!`,
       });
     }
 
     return { success: true, userId };
+  },
+});
+
+// Log multiple workouts in a single mutation for faster UX.
+export const logWorkoutBatch = mutation({
+  args: {
+    initData: v.string(),
+    entries: v.array(v.object({
+      type: v.string(),
+      count: v.number(),
+    })),
+    chatId: v.optional(v.number()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const botToken = process.env.BOT_TOKEN;
+    if (!botToken) {
+      throw new Error("Server configuration error: BOT_TOKEN missing");
+    }
+
+    const userData = await validateTelegramWebAppData(args.initData, botToken);
+    if (!userData?.user) {
+      throw new Error("Invalid or expired Telegram data");
+    }
+
+    if (!Array.isArray(args.entries) || args.entries.length === 0) {
+      throw new Error("At least one workout entry is required");
+    }
+
+    const telegramId = userData.user.id;
+    const firstName = userData.user.first_name;
+    const username = userData.user.username;
+
+    for (const entry of args.entries) {
+      if (!VALID_WORKOUT_TYPES.includes(entry.type)) {
+        throw new Error(`Invalid workout type. Must be one of: ${VALID_WORKOUT_TYPES.join(", ")}`);
+      }
+      if (!Number.isInteger(entry.count) || entry.count <= 0) {
+        throw new Error("Count must be a whole number greater than 0");
+      }
+    }
+
+    const existingUser = await ctx.db
+      .query("users")
+      .withIndex("by_telegramId", (q: any) => q.eq("telegramId", telegramId))
+      .first();
+
+    let userId = existingUser?._id;
+    if (!userId) {
+      userId = await ctx.db.insert("users", {
+        telegramId,
+        firstName,
+        username,
+        joinedAt: Date.now(),
+      });
+    } else if (existingUser.firstName !== firstName || existingUser.username !== username) {
+      await ctx.db.patch(existingUser._id, {
+        firstName,
+        username,
+      });
+    }
+
+    if (args.chatId !== undefined) {
+      const existingMembership = await ctx.db
+        .query("groupMembers")
+        .withIndex("by_user_chat", (q: any) => q.eq("userId", userId).eq("chatId", args.chatId))
+        .first();
+      if (!existingMembership) {
+        await ctx.db.insert("groupMembers", {
+          chatId: args.chatId,
+          userId,
+          joinedAt: Date.now(),
+        });
+      }
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    const totals: Record<WorkoutType, number> = { pushup: 0, squat: 0, situp: 0 };
+    let inserted = 0;
+
+    for (const entry of args.entries) {
+      await ctx.db.insert("workouts", {
+        userId,
+        type: entry.type,
+        count: entry.count,
+        date: today,
+        timestamp: Date.now(),
+        ...(args.chatId !== undefined ? { chatId: args.chatId } : {}),
+      });
+      totals[entry.type as WorkoutType] += entry.count;
+      inserted++;
+    }
+
+    if (args.chatId !== undefined) {
+      const typeLabel: Record<WorkoutType, string> = {
+        pushup: "pushups",
+        squat: "squats",
+        situp: "situps",
+      };
+      const summary = VALID_WORKOUT_TYPES
+        .filter((type) => totals[type as WorkoutType] > 0)
+        .map((type) => `${totals[type as WorkoutType]} ${typeLabel[type as WorkoutType]}`)
+        .join(" • ");
+
+      const name = username ? `@${username}` : firstName;
+      await ctx.scheduler.runAfter(0, internal.workouts.sendGroupAnnouncement, {
+        chatId: args.chatId,
+        text: `🏋️ <b>${escapeHtml(name)}</b> logged <b>${summary}</b>!`,
+      });
+    }
+
+    return { success: true, inserted, totals };
   },
 });
 
