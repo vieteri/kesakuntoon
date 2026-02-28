@@ -90,13 +90,13 @@ export function AmountEntrySheet({
 
   return (
     <div
-      className="fixed inset-0 z-[80] bg-black/60"
+      className="fixed inset-0 z-[80] bg-black/70"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        className="absolute inset-x-0 bottom-0 rounded-t-3xl border border-[var(--surface-border-strong)] bg-[var(--surface-1)] p-4 shadow-2xl"
+        className="absolute inset-x-0 bottom-0 rounded-t-3xl border border-[var(--surface-border-strong)] bg-[var(--sheet-surface)] p-4 shadow-2xl"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 14px)" }}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -112,7 +112,7 @@ export function AmountEntrySheet({
           </button>
         </div>
 
-        <div className="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-3">
+        <div className="rounded-2xl border border-[var(--surface-border)] bg-[var(--sheet-surface-2)] p-3">
           <label className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-[var(--text-secondary)]" htmlFor={`amount-input-${type}`}>
             Reps
           </label>
@@ -127,7 +127,7 @@ export function AmountEntrySheet({
               const next = e.target.value.replace(/\D/g, "");
               setDraftInput(next === "" ? "0" : String(clamp(Number.parseInt(next, 10))));
             }}
-            className="h-16 w-full rounded-xl border border-[var(--surface-border)] bg-black/20 px-3 text-center text-4xl font-black tabular-nums text-[var(--text-primary)] outline-none focus:border-[var(--action)]"
+            className="h-16 w-full rounded-xl border border-[var(--surface-border)] bg-black/35 px-3 text-center text-4xl font-black tabular-nums text-[var(--text-primary)] outline-none focus:border-[var(--action)]"
             style={{ color: accentColor }}
           />
 
@@ -136,7 +136,7 @@ export function AmountEntrySheet({
               <button
                 key={chip}
                 onClick={() => step(chip)}
-                className="min-h-12 rounded-xl border border-[var(--surface-border)] bg-black/20 px-2 py-2 text-sm font-bold text-[var(--text-primary)] active:scale-[0.98]"
+                className="min-h-12 rounded-xl border border-[var(--surface-border)] bg-black/30 px-2 py-2 text-sm font-bold text-[var(--text-primary)] active:scale-[0.98]"
               >
                 +{chip}
               </button>
@@ -149,7 +149,7 @@ export function AmountEntrySheet({
               onPointerUp={stopHold}
               onPointerLeave={stopHold}
               onPointerCancel={stopHold}
-              className="min-h-12 rounded-xl border border-[var(--surface-border)] bg-black/20 px-2 py-2 text-xl font-black text-[var(--text-primary)] active:scale-[0.98]"
+              className="min-h-12 rounded-xl border border-[var(--surface-border)] bg-black/30 px-2 py-2 text-xl font-black text-[var(--text-primary)] active:scale-[0.98]"
             >
               -1
             </button>
@@ -158,7 +158,7 @@ export function AmountEntrySheet({
               onPointerUp={stopHold}
               onPointerLeave={stopHold}
               onPointerCancel={stopHold}
-              className="min-h-12 rounded-xl border border-[var(--surface-border)] bg-black/20 px-2 py-2 text-xl font-black text-[var(--text-primary)] active:scale-[0.98]"
+              className="min-h-12 rounded-xl border border-[var(--surface-border)] bg-black/30 px-2 py-2 text-xl font-black text-[var(--text-primary)] active:scale-[0.98]"
             >
               +1
             </button>
@@ -168,7 +168,7 @@ export function AmountEntrySheet({
         <div className="mt-4 grid grid-cols-2 gap-2">
           <button
             onClick={onClose}
-            className="min-h-12 rounded-xl border border-[var(--surface-border)] bg-black/20 px-3 py-2 text-sm font-bold uppercase tracking-[0.1em] text-[var(--text-secondary)]"
+            className="min-h-12 rounded-xl border border-[var(--surface-border)] bg-black/30 px-3 py-2 text-sm font-bold uppercase tracking-[0.1em] text-[var(--text-secondary)]"
           >
             Cancel
           </button>
